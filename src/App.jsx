@@ -61,9 +61,14 @@ const LoginScreen = () => {
 
   return (
     <div className="h-screen w-full bg-[#09090b] flex flex-col items-center justify-center text-center p-6">
-      <div className="mb-8 p-6 bg-violet-600/20 rounded-full animate-pulse">
-        <Zap size={64} className="text-violet-500" />
-      </div>
+      <div className="mb-8">
+  {/* The '/' tells the code to look in the public folder automatically */}
+  <img 
+    src="/logo.jpg" 
+    alt="JEEPlanet Logo" 
+    className="h-32 w-32 object-contain drop-shadow-[0_0_15px_rgba(139,92,246,0.5)]" 
+  />
+</div>
       <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 tracking-tight">
         JEE Planner <span className="text-violet-500">Pro</span>
       </h1>
