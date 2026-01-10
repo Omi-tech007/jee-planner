@@ -523,7 +523,23 @@ export default function App() {
             </button>
           ))}
         </nav>
-        <div className="mt-auto"><button className="p-3 text-gray-600 hover:text-white transition"><Settings size={24} /></button></div>
+        <div className="mt-auto flex flex-col gap-4 items-center">
+  <button
+    onClick={exportData}
+    className="p-3 text-gray-600 hover:text-white transition"
+    title="Backup Data"
+  >
+    <Settings size={24} />
+  </button>
+
+  <button
+    onClick={exportData}
+    className="px-3 py-2 text-xs bg-white/10 rounded-lg text-gray-300 hover:bg-white/20 transition"
+  >
+    Backup
+  </button>
+</div>
+
       </aside>
 
       <main className="md:ml-20 p-6 md:p-10 pb-24">
