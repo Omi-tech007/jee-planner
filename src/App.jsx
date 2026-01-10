@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, BookOpen, Zap, Flame, Trophy, 
   Play, Pause, CheckCircle, X, ChevronRight, 
-  Plus, Trash2, FileText, TrendingUp, LogOut, Filter
+  Plus, Trash2, FileText, TrendingUp, LogOut
 } from 'lucide-react';
 import { 
   AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, 
@@ -17,7 +17,7 @@ import { doc, setDoc, getDoc } from "firebase/firestore";
 import { auth, googleProvider, db } from "./firebase"; 
 
 /**
- * JEE TRACKER PRO - v8.0 (Mains vs Advanced Logic)
+ * JEE PLANNER PRO - v9.0 (Full Features + Custom Logo)
  */
 
 // --- CONSTANTS ---
@@ -61,16 +61,18 @@ const LoginScreen = () => {
 
   return (
     <div className="h-screen w-full bg-[#09090b] flex flex-col items-center justify-center text-center p-6">
+      
+      {/* CUSTOM LOGO HERE */}
       <div className="mb-8">
-  {/* The '/' tells the code to look in the public folder automatically */}
-  <img 
-    src="/logo.jpg" 
-    alt="JEEPlanet Logo" 
-    className="h-32 w-32 object-contain drop-shadow-[0_0_15px_rgba(139,92,246,0.5)]" 
-  />
-</div>
+        <img 
+          src="/logo.png" 
+          alt="JEEPlanet Logo" 
+          className="h-32 w-32 object-contain drop-shadow-[0_0_15px_rgba(139,92,246,0.5)]" 
+        />
+      </div>
+
       <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 tracking-tight">
-        JEE Planner <span className="text-violet-500">Pro</span>
+        JEEPlanet <span className="text-violet-500">Pro</span>
       </h1>
       <p className="text-gray-400 mb-8 max-w-md">
         Sync your syllabus, track your streak, and analyze mock tests across all your devices.
@@ -167,13 +169,11 @@ const ZenTimer = ({ data, onSaveSession, onExit }) => {
   );
 };
 
-// --- 3. MOCK TEST TRACKER (UPDATED) ---
+// --- 3. MOCK TEST TRACKER (Mains & Adv Logic) ---
 const MockTestTracker = ({ data, setData }) => {
   const [isAdding, setIsAdding] = useState(false);
-  const [filterType, setFilterType] = useState('All'); // 'All', 'Mains', 'Advanced'
-  
-  // Form State
-  const [testType, setTestType] = useState('Mains'); // 'Mains' or 'Advanced'
+  const [filterType, setFilterType] = useState('All'); 
+  const [testType, setTestType] = useState('Mains');
   const [newTest, setNewTest] = useState({ 
     name: '', date: '', p: '', c: '', m: '', maxMarks: 300 
   });
@@ -185,7 +185,6 @@ const MockTestTracker = ({ data, setData }) => {
     const m = parseFloat(newTest.m) || 0;
     const total = p + c + m;
     
-    // For mains, force max marks to 300. For Adv, use custom input
     const max = testType === 'Mains' ? 300 : (parseInt(newTest.maxMarks) || 360);
 
     const testEntry = { 
@@ -209,10 +208,9 @@ const MockTestTracker = ({ data, setData }) => {
     }
   };
 
-  // Filter and Sort
   const filteredTests = (data.mockTests || []).filter(t => {
     if (filterType === 'All') return true;
-    return t.type === filterType || (!t.type && filterType === 'Mains'); // Backward compat
+    return t.type === filterType || (!t.type && filterType === 'Mains'); 
   });
   
   const sortedTests = [...filteredTests].sort((a,b) => new Date(a.date) - new Date(b.date));
@@ -236,8 +234,6 @@ const MockTestTracker = ({ data, setData }) => {
 
       {isAdding && (
         <GlassCard className="animate-in fade-in slide-in-from-top-4 border-t-4 border-t-violet-500">
-          
-          {/* TYPE SELECTOR */}
           <div className="flex gap-4 mb-6">
              <label className="flex items-center gap-2 cursor-pointer">
                 <input type="radio" name="testType" className="accent-violet-500 w-5 h-5" checked={testType === 'Mains'} onChange={() => setTestType('Mains')} />
@@ -261,7 +257,6 @@ const MockTestTracker = ({ data, setData }) => {
                 value={newTest.date} onChange={e => setNewTest({...newTest, date: e.target.value})} />
             </div>
             
-            {/* SUBJECT SCORES */}
             <div className="space-y-2">
               <label className="text-xs text-violet-400 font-bold uppercase">Physics</label>
               <input type="number" placeholder="0" className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white focus:border-violet-500 outline-none" 
@@ -279,7 +274,6 @@ const MockTestTracker = ({ data, setData }) => {
             </div>
           </div>
 
-          {/* ADVANCED CUSTOM MAX MARKS */}
           {testType === 'Advanced' && (
               <div className="mt-4 pt-4 border-t border-white/5">
                   <label className="text-xs text-orange-400 font-bold uppercase">Total Max Marks (Custom)</label>
@@ -297,7 +291,6 @@ const MockTestTracker = ({ data, setData }) => {
         </GlassCard>
       )}
 
-      {/* CHART SECTION */}
       {sortedTests.length > 0 ? (
         <GlassCard className="h-[350px]">
            <div className="flex justify-between items-center mb-4">
@@ -323,12 +316,10 @@ const MockTestTracker = ({ data, setData }) => {
         </div>
       )}
 
-      {/* TEST HISTORY LIST */}
       <div className="grid grid-cols-1 gap-3">
         {sortedTests.slice().reverse().map(test => (
           <div key={test.id} className="group bg-[#121212] border border-white/10 p-4 rounded-xl flex items-center justify-between hover:border-white/20 transition">
              <div className="flex gap-4 items-center">
-                {/* TYPE BADGE */}
                 <div className={`w-1 h-12 rounded-full ${test.type === 'Advanced' ? 'bg-orange-500' : 'bg-violet-500'}`}></div>
                 <div>
                     <div className="flex items-center gap-3">
@@ -345,7 +336,6 @@ const MockTestTracker = ({ data, setData }) => {
                     </div>
                 </div>
              </div>
-             
              <div className="flex items-center gap-6">
                 <div className="text-right">
                    <div className="text-2xl font-bold text-white">
@@ -797,9 +787,12 @@ export default function App() {
       </AnimatePresence>
 
       <aside className="fixed left-0 top-0 h-full w-20 bg-[#09090b] border-r border-white/10 flex flex-col items-center py-8 z-40 hidden md:flex">
-        <div className="mb-12 p-3 bg-violet-600 rounded-xl shadow-lg shadow-violet-600/20">
-          <Zap size={24} className="text-white" />
+        
+        {/* SIDEBAR LOGO */}
+        <div className="mb-12 p-2 bg-white/5 rounded-2xl border border-white/10 shadow-lg">
+           <img src="/logo.png" alt="Logo" className="w-10 h-10 object-contain" />
         </div>
+
         <nav className="flex flex-col gap-8 w-full">
           {[
             { id: 'dashboard', icon: LayoutDashboard, label: 'Dash' },
