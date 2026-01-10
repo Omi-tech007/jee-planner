@@ -1,21 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  LayoutDashboard, BookOpen, Clock, Zap, Flame, Trophy, 
-  Settings, Play, Pause, CheckCircle, X, ChevronRight, 
-  Plus, Trash2, RotateCcw, Award
+  LayoutDashboard, BookOpen, Zap, Flame, Trophy, 
+  Play, Pause, CheckCircle, X, ChevronRight, 
+  Plus, Trash2, FileText, TrendingUp
 } from 'lucide-react';
 import { 
-  AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, CartesianGrid 
+  AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, 
+  ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell,
+  LineChart, Line, Legend
 } from 'recharts';
 import { motion, AnimatePresence } from 'framer-motion';
 
 /**
- * JEE TRACKER PRO - v5.1 (Real Streak Logic)
- * - Fixed: Streak now calculates based on 2 hours (120 mins) threshold
+ * JEE TRACKER PRO - v6.0 (Mock Tests & Analytics Update)
  */
 
 // --- CONSTANTS ---
 const SUBJECTS = ["Physics", "Maths", "Organic Chem", "Inorganic Chem", "Physical Chem"];
+const COLORS = ['#8b5cf6', '#3b82f6', '#10b981']; // Violet (P), Blue (M), Emerald (C)
 
 const INITIAL_DATA = {
   notepad: "",
@@ -25,8 +27,8 @@ const INITIAL_DATA = {
     ...acc,
     [sub]: { chapters: [], timeSpent: 0 }
   }), {}),
-  studyLog: [],
-  history: {}, // Format: { "2024-01-01": 150 } (minutes)
+  mockTests: [], // New: Stores test history
+  history: {}, 
   xp: 0, 
   darkMode: true
 };
@@ -123,7 +125,134 @@ const ZenTimer = ({ data, onSaveSession, onExit }) => {
   );
 };
 
-// --- 2. SYLLABUS COMPONENT ---
+// --- 2. MOCK TEST TRACKER (NEW) ---
+const MockTestTracker = ({ data, setData }) => {
+  const [isAdding, setIsAdding] = useState(false);
+  const [newTest, setNewTest] = useState({ name: '', date: '', p: '', c: '', m: '' });
+
+  const addTest = () => {
+    if (!newTest.name || !newTest.date) return;
+    const p = parseInt(newTest.p) || 0;
+    const c = parseInt(newTest.c) || 0;
+    const m = parseInt(newTest.m) || 0;
+    const total = p + c + m;
+
+    const testEntry = { id: Date.now(), ...newTest, p, c, m, total };
+    setData(prev => ({ ...prev, mockTests: [...(prev.mockTests || []), testEntry] }));
+    setIsAdding(false);
+    setNewTest({ name: '', date: '', p: '', c: '', m: '' });
+  };
+
+  const deleteTest = (id) => {
+    if(window.confirm("Delete this test record?")) {
+      setData(prev => ({ ...prev, mockTests: prev.mockTests.filter(t => t.id !== id) }));
+    }
+  };
+
+  // Sort tests by date for the chart
+  const sortedTests = [...(data.mockTests || [])].sort((a,b) => new Date(a.date) - new Date(b.date));
+
+  return (
+    <div className="space-y-6 max-w-6xl mx-auto">
+      <div className="flex justify-between items-center">
+        <div>
+           <h1 className="text-3xl font-bold text-white mb-2">Mock Test Analysis</h1>
+           <p className="text-gray-400">Track your scores and analyze performance trends.</p>
+        </div>
+        <button onClick={() => setIsAdding(!isAdding)} className="px-6 py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-bold shadow-lg shadow-violet-600/20 flex items-center gap-2">
+          {isAdding ? <X size={18}/> : <Plus size={18}/>} {isAdding ? 'Cancel' : 'Log New Test'}
+        </button>
+      </div>
+
+      {isAdding && (
+        <GlassCard className="animate-in fade-in slide-in-from-top-4">
+          <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
+            <div className="md:col-span-2 space-y-2">
+              <label className="text-xs text-gray-400 font-bold uppercase">Test Name</label>
+              <input type="text" placeholder="e.g., AITS Full Test 1" className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white focus:border-violet-500 outline-none" 
+                value={newTest.name} onChange={e => setNewTest({...newTest, name: e.target.value})} />
+            </div>
+            <div className="md:col-span-1 space-y-2">
+              <label className="text-xs text-gray-400 font-bold uppercase">Date</label>
+              <input type="date" className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white focus:border-violet-500 outline-none" 
+                value={newTest.date} onChange={e => setNewTest({...newTest, date: e.target.value})} />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs text-violet-400 font-bold uppercase">Physics</label>
+              <input type="number" placeholder="0" className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white focus:border-violet-500 outline-none" 
+                value={newTest.p} onChange={e => setNewTest({...newTest, p: e.target.value})} />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs text-green-400 font-bold uppercase">Chem</label>
+              <input type="number" placeholder="0" className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white focus:border-violet-500 outline-none" 
+                value={newTest.c} onChange={e => setNewTest({...newTest, c: e.target.value})} />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs text-blue-400 font-bold uppercase">Maths</label>
+              <input type="number" placeholder="0" className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white focus:border-violet-500 outline-none" 
+                value={newTest.m} onChange={e => setNewTest({...newTest, m: e.target.value})} />
+            </div>
+          </div>
+          <button onClick={addTest} className="mt-6 w-full py-3 bg-white/10 hover:bg-white/20 text-white font-bold rounded-lg transition">Save Test Score</button>
+        </GlassCard>
+      )}
+
+      {/* CHART SECTION */}
+      {sortedTests.length > 0 ? (
+        <GlassCard className="h-[350px]">
+           <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><TrendingUp size={20}/> Performance Trend</h3>
+           <ResponsiveContainer width="100%" height="85%">
+             <LineChart data={sortedTests}>
+               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+               <XAxis dataKey="name" stroke="#9ca3af" fontSize={12} tickLine={false} axisLine={false} />
+               <YAxis stroke="#9ca3af" fontSize={12} tickLine={false} axisLine={false} domain={[0, 'auto']} />
+               <RechartsTooltip contentStyle={{backgroundColor: '#18181b', borderColor: '#27272a', borderRadius: '8px', color: '#fff'}} />
+               <Legend />
+               <Line type="monotone" dataKey="total" stroke="#f59e0b" strokeWidth={3} dot={{r:4}} name="Total Score" />
+               <Line type="monotone" dataKey="p" stroke="#8b5cf6" strokeWidth={2} dot={false} name="Physics" />
+               <Line type="monotone" dataKey="c" stroke="#10b981" strokeWidth={2} dot={false} name="Chemistry" />
+               <Line type="monotone" dataKey="m" stroke="#3b82f6" strokeWidth={2} dot={false} name="Maths" />
+             </LineChart>
+           </ResponsiveContainer>
+        </GlassCard>
+      ) : (
+        <div className="text-center py-10 border border-dashed border-white/10 rounded-2xl text-gray-500">
+           No mock tests logged yet. Add your first test to see the analytics graph!
+        </div>
+      )}
+
+      {/* TEST HISTORY LIST */}
+      <div className="grid grid-cols-1 gap-3">
+        {sortedTests.slice().reverse().map(test => (
+          <div key={test.id} className="group bg-[#121212] border border-white/10 p-4 rounded-xl flex items-center justify-between hover:border-white/20 transition">
+             <div>
+                <div className="flex items-center gap-3">
+                   <h3 className="font-bold text-white">{test.name}</h3>
+                   <span className="text-xs text-gray-500 bg-white/5 px-2 py-1 rounded">{test.date}</span>
+                </div>
+                <div className="flex gap-4 mt-2 text-sm">
+                   <span className="text-violet-400">P: {test.p}</span>
+                   <span className="text-green-400">C: {test.c}</span>
+                   <span className="text-blue-400">M: {test.m}</span>
+                </div>
+             </div>
+             <div className="flex items-center gap-6">
+                <div className="text-right">
+                   <div className="text-2xl font-bold text-white">{test.total}</div>
+                   <div className="text-xs text-gray-500 uppercase">Total</div>
+                </div>
+                <button onClick={() => deleteTest(test.id)} className="p-2 text-gray-600 hover:text-red-500 opacity-0 group-hover:opacity-100 transition">
+                   <Trash2 size={18} />
+                </button>
+             </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// --- 3. SYLLABUS COMPONENT ---
 const Syllabus = ({ data, setData }) => {
   const [selectedSubject, setSelectedSubject] = useState(SUBJECTS[0]);
   const [gradeView, setGradeView] = useState('11');
@@ -257,7 +386,7 @@ const ChapterItem = ({ chapter, onUpdate, onDelete }) => {
   );
 };
 
-// --- 3. DASHBOARD ---
+// --- 4. DASHBOARD ---
 const Dashboard = ({ data, setData, startFocus }) => {
   const today = new Date().toISOString().split('T')[0];
   const todayMins = data.history?.[today] || 0;
@@ -266,31 +395,20 @@ const Dashboard = ({ data, setData, startFocus }) => {
   const nextLevelXP = (level + 1) * 1000;
   const levelProgress = Math.round((xp / nextLevelXP) * 100);
 
-  // --- REAL STREAK LOGIC ---
+  // --- STREAK LOGIC ---
   const getStreak = () => {
     let streak = 0;
     const history = data.history || {};
-    const threshold = 120; // 2 Hours in minutes
-
-    // 1. Check Today
-    if ((history[today] || 0) >= threshold) {
-      streak++;
-    }
-
-    // 2. Check Backwards from Yesterday
+    const threshold = 120; // 2 Hours
+    if ((history[today] || 0) >= threshold) streak++;
     let d = new Date();
-    d.setDate(d.getDate() - 1); // Start from yesterday
-
+    d.setDate(d.getDate() - 1);
     while (true) {
       const dateStr = d.toISOString().split('T')[0];
-      const mins = history[dateStr] || 0;
-      
-      if (mins >= threshold) {
+      if ((history[dateStr] || 0) >= threshold) {
         streak++;
-        d.setDate(d.getDate() - 1); // Go back one more day
-      } else {
-        break; // Streak broken
-      }
+        d.setDate(d.getDate() - 1);
+      } else break;
     }
     return streak;
   };
@@ -302,20 +420,35 @@ const Dashboard = ({ data, setData, startFocus }) => {
         const d = new Date();
         d.setDate(d.getDate() - i);
         const dateStr = d.toISOString().split('T')[0];
-        const dayName = days[d.getDay()];
         const mins = data.history?.[dateStr] || 0;
-        chartData.push({
-            name: dayName,
-            hours: parseFloat((mins / 60).toFixed(1))
-        });
+        chartData.push({ name: days[d.getDay()], hours: parseFloat((mins / 60).toFixed(1)) });
     }
     return chartData;
+  };
+
+  // --- PIE CHART DATA GENERATOR ---
+  const getSubjectDistribution = () => {
+    const pTime = data.subjects["Physics"]?.timeSpent || 0;
+    const mTime = data.subjects["Maths"]?.timeSpent || 0;
+    // Aggregate all Chemistries
+    const cTime = (data.subjects["Organic Chem"]?.timeSpent || 0) + 
+                  (data.subjects["Inorganic Chem"]?.timeSpent || 0) + 
+                  (data.subjects["Physical Chem"]?.timeSpent || 0);
+    
+    // Prevent empty chart
+    if (pTime + cTime + mTime === 0) return [{name: 'No Data', value: 1}];
+
+    return [
+      { name: 'Physics', value: pTime },
+      { name: 'Maths', value: mTime },
+      { name: 'Chemistry', value: cTime },
+    ];
   };
 
   const addTask = () => {
     const t = prompt("What is your main task?");
     if(t) {
-      const newTask = { id: Date.now(), text: t, completed: false, subject: 'General' };
+      const newTask = { id: Date.now(), text: t, completed: false };
       setData(prev => ({ ...prev, tasks: [newTask, ...prev.tasks] }));
     }
   };
@@ -331,9 +464,11 @@ const Dashboard = ({ data, setData, startFocus }) => {
     setData(prev => ({ ...prev, tasks: prev.tasks.filter(t => t.id !== id) }));
   };
 
+  const pieData = getSubjectDistribution();
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
-      {/* 1. WELCOME HEADER */}
+      {/* HEADER */}
       <div className="bg-[#121212] border border-white/10 p-8 rounded-2xl relative overflow-hidden">
         <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
           <div>
@@ -345,43 +480,29 @@ const Dashboard = ({ data, setData, startFocus }) => {
                <Flame size={16} fill="currentColor" /> {getStreak()} day streak!
             </div>
           </div>
-          <button 
-            onClick={startFocus}
-            className="px-8 py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-lg font-bold shadow-lg shadow-violet-600/30 flex items-center gap-2 transition-transform active:scale-95"
-          >
+          <button onClick={startFocus} className="px-8 py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-lg font-bold shadow-lg shadow-violet-600/30 flex items-center gap-2 transition-transform active:scale-95">
             <Play size={18} fill="currentColor" /> Start Studying
           </button>
         </div>
       </div>
 
-      {/* 2. STATS ROW */}
+      {/* STATS */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <GlassCard className="flex flex-col justify-between h-32">
-  <div className="flex justify-between items-start">
-    <span className="text-gray-500 text-xs font-bold uppercase tracking-wider">
-      Level
-    </span>
-    <Award size={16} className="text-yellow-500" />
-  </div>
+          <div className="flex justify-between items-start">
+            <span className="text-gray-500 text-xs font-bold uppercase tracking-wider">Level</span>
+            <Trophy size={16} className="text-yellow-500" />
+          </div>
+          <div className="text-3xl font-bold text-white">Lv {level}</div>
+          <div className="w-full bg-white/10 h-2 rounded-full overflow-hidden">
+            <div className="h-full bg-yellow-500 transition-all" style={{ width: `${levelProgress}%` }} />
+          </div>
+        </GlassCard>
 
-  <div className="text-3xl font-bold text-white">
-    Lv {level}
-  </div>
-
-  <div className="w-full bg-white/10 h-2 rounded-full overflow-hidden">
-    <div
-      className="h-full bg-yellow-500 transition-all"
-      style={{ width: `${levelProgress}%` }}
-    />
-  </div>
-
-  <div className="text-xs text-gray-500">
-    {xp} / {nextLevelXP} XP
-  </div></GlassCard>
         <GlassCard className="flex flex-col justify-between h-32">
           <div className="flex justify-between items-start">
             <span className="text-gray-500 text-xs font-bold uppercase tracking-wider">Total XP</span>
-            <Award size={16} className="text-yellow-500" />
+            <Zap size={16} className="text-violet-500" />
           </div>
           <div className="text-3xl font-bold text-white">{xp.toLocaleString()}</div>
           <div className="text-xs text-gray-500">1 min = 1 XP</div>
@@ -389,28 +510,25 @@ const Dashboard = ({ data, setData, startFocus }) => {
 
         <GlassCard className="col-span-1 md:col-span-2 flex flex-col justify-between h-32">
            <div className="flex justify-between items-start">
-            <span className="text-gray-500 text-xs font-bold uppercase tracking-wider">Progress</span>
-            <Trophy size={16} className="text-green-500" />
+            <span className="text-gray-500 text-xs font-bold uppercase tracking-wider">Daily Goal</span>
+            <BookOpen size={16} className="text-green-500" />
           </div>
           <div className="w-full">
             <div className="flex justify-between text-white font-bold mb-2">
                <span>{Math.round((todayMins / (data.dailyGoal*60)) * 100)}%</span>
-               <span className="text-gray-500 text-sm">Target: {data.dailyGoal}h</span>
+               <span className="text-gray-500 text-sm">{data.dailyGoal}h Target</span>
             </div>
             <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-violet-600 shadow-[0_0_10px_rgba(139,92,246,0.5)] transition-all duration-1000" 
-                  style={{ width: `${Math.min((todayMins / (data.dailyGoal*60)) * 100, 100)}%` }} 
-                />
+                <div className="h-full bg-violet-600 transition-all duration-1000" style={{ width: `${Math.min((todayMins / (data.dailyGoal*60)) * 100, 100)}%` }} />
             </div>
           </div>
         </GlassCard>
       </div>
 
-      {/* 3. GRAPH & TASKS */}
+      {/* GRAPHS ROW */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <GlassCard className="lg:col-span-2 min-h-[350px] flex flex-col">
-          <h3 className="text-lg font-bold text-white mb-6">This Week's Progress</h3>
+          <h3 className="text-lg font-bold text-white mb-6">Study Trends (Last 7 Days)</h3>
           <div className="flex-1 w-full min-h-[250px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={getWeeklyData()}>
@@ -430,30 +548,58 @@ const Dashboard = ({ data, setData, startFocus }) => {
           </div>
         </GlassCard>
 
-        <GlassCard>
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-lg font-bold text-white">To Do</h3>
-            <button onClick={addTask} className="text-xs px-3 py-1 bg-white/10 text-white rounded hover:bg-white/20 transition">+ Add</button>
-          </div>
-          <div className="space-y-3 max-h-[280px] overflow-y-auto pr-2">
-            {data.tasks.map(task => (
-              <div key={task.id} className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5 hover:border-violet-500/50 transition group">
-                <div className="flex items-center gap-3">
-                  <div 
-                    onClick={() => toggleTask(task.id)}
-                    className={`w-5 h-5 rounded-full border-2 border-gray-600 group-hover:border-violet-500 cursor-pointer flex items-center justify-center ${task.completed ? 'bg-violet-500 border-violet-500' : ''}`}
-                  >
-                    {task.completed && <CheckCircle size={12} className="text-white" />}
-                  </div>
-                  <span className={task.completed ? 'text-gray-500 line-through text-sm' : 'text-gray-200 text-sm'}>{task.text}</span>
-                </div>
-                <button onClick={() => removeTask(task.id)} className="text-gray-600 hover:text-red-500 opacity-0 group-hover:opacity-100 transition"><X size={14}/></button>
-              </div>
-            ))}
-            {data.tasks.length === 0 && <div className="text-center text-gray-600 text-sm py-8">No active tasks</div>}
+        {/* PIE CHART SECTION */}
+        <GlassCard className="min-h-[350px] flex flex-col">
+          <h3 className="text-lg font-bold text-white mb-4">Subject Balance</h3>
+          <div className="flex-1 relative">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={pieData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={80}
+                  paddingAngle={5}
+                  dataKey="value"
+                >
+                  {pieData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.name === 'No Data' ? '#333' : COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <RechartsTooltip contentStyle={{backgroundColor: '#18181b', borderColor: '#27272a', borderRadius: '8px'}} formatter={(val, name) => [name === 'No Data' ? '0' : `${Math.round(val/60)}m`, name]} />
+                <Legend verticalAlign="bottom" height={36} iconType="circle"/>
+              </PieChart>
+            </ResponsiveContainer>
+             {/* Center Text Overlay */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none pb-8">
+               <span className="text-gray-500 text-xs font-bold uppercase">Total Time</span>
+            </div>
           </div>
         </GlassCard>
       </div>
+
+      {/* TASKS */}
+      <GlassCard>
+         <div className="flex justify-between items-center mb-6">
+           <h3 className="text-lg font-bold text-white">To Do</h3>
+           <button onClick={addTask} className="text-xs px-3 py-1 bg-white/10 text-white rounded hover:bg-white/20 transition">+ Add</button>
+         </div>
+         <div className="space-y-3 max-h-[280px] overflow-y-auto pr-2">
+           {data.tasks.map(task => (
+             <div key={task.id} className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5 hover:border-violet-500/50 transition group">
+               <div className="flex items-center gap-3">
+                 <div onClick={() => toggleTask(task.id)} className={`w-5 h-5 rounded-full border-2 border-gray-600 group-hover:border-violet-500 cursor-pointer flex items-center justify-center ${task.completed ? 'bg-violet-500 border-violet-500' : ''}`}>
+                   {task.completed && <CheckCircle size={12} className="text-white" />}
+                 </div>
+                 <span className={task.completed ? 'text-gray-500 line-through text-sm' : 'text-gray-200 text-sm'}>{task.text}</span>
+               </div>
+               <button onClick={() => removeTask(task.id)} className="text-gray-600 hover:text-red-500 opacity-0 group-hover:opacity-100 transition"><X size={14}/></button>
+             </div>
+           ))}
+           {data.tasks.length === 0 && <div className="text-center text-gray-600 text-sm py-8">No active tasks</div>}
+         </div>
+      </GlassCard>
     </div>
   );
 };
@@ -465,17 +611,6 @@ export default function App() {
     return saved ? JSON.parse(saved) : INITIAL_DATA;
   });
   const [view, setView] = useState('dashboard');
-  const exportData = () => {
-  const blob = new Blob(
-    [JSON.stringify(data, null, 2)],
-    { type: "application/json" }
-  );
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "jee-tracker-backup.json";
-  a.click();
-};
 
   useEffect(() => {
     localStorage.setItem('jeeTrackerPro', JSON.stringify(data));
@@ -515,42 +650,29 @@ export default function App() {
         </div>
         <nav className="flex flex-col gap-8 w-full">
           {[
-            { id: 'dashboard', icon: LayoutDashboard },
-            { id: 'syllabus', icon: BookOpen },
+            { id: 'dashboard', icon: LayoutDashboard, label: 'Dash' },
+            { id: 'syllabus', icon: BookOpen, label: 'Syllabus' },
+            { id: 'mocks', icon: FileText, label: 'Mocks' },
           ].map(item => (
-            <button key={item.id} onClick={() => setView(item.id)} className={`w-full flex justify-center py-3 border-l-2 transition-all duration-300 ${view === item.id ? 'border-violet-500 text-white' : 'border-transparent text-gray-600 hover:text-violet-400'}`}>
+            <button key={item.id} onClick={() => setView(item.id)} className={`relative group w-full flex justify-center py-3 border-l-2 transition-all duration-300 ${view === item.id ? 'border-violet-500 text-white' : 'border-transparent text-gray-600 hover:text-violet-400'}`}>
               <item.icon size={24} />
+              <span className="absolute left-14 bg-white text-black px-2 py-1 rounded text-xs font-bold opacity-0 group-hover:opacity-100 transition pointer-events-none">{item.label}</span>
             </button>
           ))}
         </nav>
-        <div className="mt-auto flex flex-col gap-4 items-center">
-  <button
-    onClick={exportData}
-    className="p-3 text-gray-600 hover:text-white transition"
-    title="Backup Data"
-  >
-    <Settings size={24} />
-  </button>
-
-  <button
-    onClick={exportData}
-    className="px-3 py-2 text-xs bg-white/10 rounded-lg text-gray-300 hover:bg-white/20 transition"
-  >
-    Backup
-  </button>
-</div>
-
       </aside>
 
       <main className="md:ml-20 p-6 md:p-10 pb-24">
         {view === 'dashboard' && <Dashboard data={data} setData={setData} startFocus={() => setView('zen')} />}
         {view === 'syllabus' && <Syllabus data={data} setData={setData} />}
+        {view === 'mocks' && <MockTestTracker data={data} setData={setData} />}
       </main>
 
       <div className="md:hidden fixed bottom-0 left-0 w-full bg-[#09090b]/90 backdrop-blur-md border-t border-white/10 p-4 flex justify-around z-40">
         <button onClick={() => setView('dashboard')} className={view === 'dashboard' ? 'text-violet-500' : 'text-gray-500'}><LayoutDashboard /></button>
         <button onClick={() => setView('zen')} className="bg-white text-black p-4 rounded-full -mt-8 shadow-lg shadow-white/20"><Play fill="black" /></button>
         <button onClick={() => setView('syllabus')} className={view === 'syllabus' ? 'text-violet-500' : 'text-gray-500'}><BookOpen /></button>
+        <button onClick={() => setView('mocks')} className={view === 'mocks' ? 'text-violet-500' : 'text-gray-500'}><FileText /></button>
       </div>
     </div>
   );
