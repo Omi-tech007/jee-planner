@@ -262,6 +262,9 @@ const Dashboard = ({ data, setData, startFocus }) => {
   const today = new Date().toISOString().split('T')[0];
   const todayMins = data.history?.[today] || 0;
   const xp = data.xp || 0;
+  const level = Math.floor(xp / 1000);
+  const nextLevelXP = (level + 1) * 1000;
+  const levelProgress = Math.round((xp / nextLevelXP) * 100);
 
   // --- REAL STREAK LOGIC ---
   const getStreak = () => {
@@ -354,16 +357,27 @@ const Dashboard = ({ data, setData, startFocus }) => {
       {/* 2. STATS ROW */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <GlassCard className="flex flex-col justify-between h-32">
-          <div className="flex justify-between items-start">
-            <span className="text-gray-500 text-xs font-bold uppercase tracking-wider">Time Today</span>
-            <Clock size={16} className="text-violet-500" />
-          </div>
-          <div className="text-3xl font-bold text-white">
-            {Math.floor(todayMins/60)}h {Math.round(todayMins%60)}m
-          </div>
-          <div className="text-xs text-gray-500">Goal: {data.dailyGoal}h</div>
-        </GlassCard>
+  <div className="flex justify-between items-start">
+    <span className="text-gray-500 text-xs font-bold uppercase tracking-wider">
+      Level
+    </span>
+    <Award size={16} className="text-yellow-500" />
+  </div>
 
+  <div className="text-3xl font-bold text-white">
+    Lv {level}
+  </div>
+
+  <div className="w-full bg-white/10 h-2 rounded-full overflow-hidden">
+    <div
+      className="h-full bg-yellow-500 transition-all"
+      style={{ width: `${levelProgress}%` }}
+    />
+  </div>
+
+  <div className="text-xs text-gray-500">
+    {xp} / {nextLevelXP} XP
+  </div></GlassCard>
         <GlassCard className="flex flex-col justify-between h-32">
           <div className="flex justify-between items-start">
             <span className="text-gray-500 text-xs font-bold uppercase tracking-wider">Total XP</span>
