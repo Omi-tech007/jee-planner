@@ -4,6 +4,7 @@ import {
   Play, Pause, CheckCircle, X, ChevronRight, 
   Plus, Trash2, FileText, TrendingUp, LogOut
 } from 'lucide-react';
+import { LOGO_URL } from './logoData';
 import { 
   AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, 
   ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell,
@@ -65,10 +66,10 @@ const LoginScreen = () => {
       {/* CUSTOM LOGO HERE */}
       <div className="mb-8">
         <img 
-          src="/logo.png" 
-          alt="JEEPlanet Logo" 
-          className="h-32 w-32 object-contain drop-shadow-[0_0_15px_rgba(139,92,246,0.5)]" 
-        />
+       src={LOGO_URL}     // <--- USE YOUR NEW VARIABLE
+       alt="JEEPlanet Logo" 
+       className="h-32 w-32 object-contain drop-shadow-[0_0_15px_rgba(139,92,246,0.5)]" 
+       /> 
       </div>
 
       <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 tracking-tight">
@@ -790,8 +791,12 @@ export default function App() {
         
         {/* SIDEBAR LOGO */}
         <div className="mb-12 p-2 bg-white/5 rounded-2xl border border-white/10 shadow-lg">
-           <img src="/logo.png" alt="Logo" className="w-10 h-10 object-contain" />
-        </div>
+       <img 
+       src={LOGO_URL}    // <--- USE YOUR NEW VARIABLE
+       alt="Logo" 
+       className="w-10 h-10 object-contain" 
+       />
+       </div>
 
         <nav className="flex flex-col gap-8 w-full">
           {[
