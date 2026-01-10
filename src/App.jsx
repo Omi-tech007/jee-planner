@@ -1,557 +1,550 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  LayoutDashboard, BookOpen, Clock, BarChart2, CheckCircle, 
-  Plus, Trash2, Moon, Sun, ChevronRight, Play, Pause, RotateCcw,
-  Music, Image as ImageIcon, Settings, List, Target, Zap
+  LayoutDashboard, BookOpen, Clock, Zap, Flame, Trophy, 
+  Settings, Play, Pause, CheckCircle, X, ChevronRight, 
+  Plus, Trash2, RotateCcw, Award
 } from 'lucide-react';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line 
+  AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, CartesianGrid 
 } from 'recharts';
+import { motion, AnimatePresence } from 'framer-motion';
 
 /**
- * JEE STUDY PLANNER - v2.0 (With Zen Focus Mode)
+ * JEE TRACKER PRO - v5.0 (Clean Architecture)
+ * - Removed Levels, Heatmaps, Focus Score
+ * - Added Class 11/12 Division
+ * - New Graph Style
  */
 
 // --- CONSTANTS ---
-const SUBJECTS = [
-  "Physics", 
-  "Maths", 
-  "Organic Chemistry", 
-  "Inorganic Chemistry", 
-  "Physical Chemistry"
-];
+const SUBJECTS = ["Physics", "Maths", "Organic Chem", "Inorganic Chem", "Physical Chem"];
 
 const INITIAL_DATA = {
   notepad: "",
-  dailyGoal: 8, // Hours per day goal
+  dailyGoal: 10, // Updated to 10 hours
   tasks: [],
   subjects: SUBJECTS.reduce((acc, sub) => ({
     ...acc,
-    [sub]: { chapters: [], timeSpent: 0, kpp: [] }
+    [sub]: { chapters: [], timeSpent: 0 }
   }), {}),
   studyLog: [],
-  darkMode: false
+  xp: 0, // 1 XP = 1 Minute
+  darkMode: true
 };
 
-// --- COMPONENTS ---
+// --- UTILITY COMPONENTS ---
 
-const Card = ({ children, className = "" }) => (
-  <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 ${className}`}>
+const GlassCard = ({ children, className = "", hover = false }) => (
+  <motion.div 
+    whileHover={hover ? { scale: 1.01, backgroundColor: "rgba(255,255,255,0.08)" } : {}}
+    className={`bg-[#121212] border border-white/10 rounded-2xl p-6 shadow-xl ${className}`}
+  >
     {children}
+  </motion.div>
+);
+
+const Badge = ({ icon: Icon, label, color }) => (
+  <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold border ${color}`}>
+    <Icon size={12} /> {label}
   </div>
 );
 
-const Button = ({ onClick, children, variant = "primary", className = "" }) => {
-  const baseStyle = "px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-2 justify-center";
-  const variants = {
-    primary: "bg-amber-500 hover:bg-amber-600 text-white shadow-md shadow-amber-500/20",
-    secondary: "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600",
-    danger: "text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20",
-    ghost: "text-gray-500 hover:text-amber-500",
-    zen: "bg-violet-600 hover:bg-violet-700 text-white shadow-lg shadow-violet-600/30 px-8 py-3 rounded-xl text-lg"
-  };
-  return (
-    <button onClick={onClick} className={`${baseStyle} ${variants[variant]} ${className}`}>
-      {children}
-    </button>
-  );
-};
-
-// --- NEW FEATURE: ZEN FOCUS MODE ---
-const FocusMode = ({ subjects, data, onSaveTime, tasks }) => {
+// --- 1. ZEN FOCUS MODE ---
+const ZenTimer = ({ data, onSaveSession, onExit }) => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [isActive, setIsActive] = useState(false);
-  const [mode, setMode] = useState('stopwatch'); // stopwatch | timer
   const [selectedSub, setSelectedSub] = useState(SUBJECTS[0]);
-  const [selectedTask, setSelectedTask] = useState(null);
-  const [showTaskSelector, setShowTaskSelector] = useState(false);
-
-  // Calculate Daily Progress
-  const today = new Date().toISOString().split('T')[0];
-  const todayLog = data.studyLog.find(e => e.date === today);
-  const minutesStudiedToday = todayLog ? todayLog.minutes : 0;
-  const hoursStudied = Math.floor(minutesStudiedToday / 60);
-  const minsStudied = minutesStudiedToday % 60;
-  const goalMinutes = (data.dailyGoal || 8) * 60;
-  const progressPercent = Math.min((minutesStudiedToday / goalMinutes) * 100, 100);
 
   useEffect(() => {
     let interval = null;
     if (isActive) {
-      interval = setInterval(() => {
-        if (mode === 'stopwatch') {
-          setTimeLeft(t => t + 1);
-        } else {
-          setTimeLeft(t => {
-            if (t <= 0) { setIsActive(false); onSaveTime(selectedSub, selectedTask?.id, 0); return 0; }
-            return t - 1;
-          });
-        }
-      }, 1000);
+      interval = setInterval(() => setTimeLeft(t => t + 1), 1000);
     }
     return () => clearInterval(interval);
-  }, [isActive, mode]);
+  }, [isActive]);
 
-  const formatTime = (seconds) => {
-    const hrs = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    
-    if (hrs > 0) {
-      return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    }
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  const formatTime = (s) => {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    return `${h > 0 ? h + ':' : ''}${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
   };
 
-  const handleStop = () => {
+  const handleFinish = () => {
     setIsActive(false);
-    onSaveTime(selectedSub, timeLeft);
-    setTimeLeft(0);
+    onSaveSession(selectedSub, timeLeft);
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-2rem)] bg-[#111111] text-white rounded-3xl overflow-hidden relative p-8">
-      
-      {/* Top Bar */}
-      <div className="flex justify-between items-start">
-        {/* Daily Goal Widget */}
-        <div className="bg-[#1c1c1e] p-4 rounded-2xl border border-white/5 w-64">
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-gray-400 text-xs font-medium uppercase tracking-wider flex items-center gap-2">
-              <Zap size={14} className="text-violet-500" /> Daily Goal
-            </span>
-            <span className="text-xs text-gray-500">
-              {hoursStudied}h {minsStudied}m / {data.dailyGoal}h 0m
-            </span>
-          </div>
-          <div className="h-2 bg-[#2c2c2e] rounded-full overflow-hidden">
-            <div className="h-full bg-violet-600 transition-all duration-500" style={{ width: `${progressPercent}%` }} />
-          </div>
+    <motion.div 
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 1.1 }}
+      className="fixed inset-0 z-50 bg-[#09090b] flex flex-col items-center justify-center text-white"
+    >
+      <div className="z-10 flex flex-col items-center gap-8 w-full max-w-md px-6">
+        <div className="flex items-center gap-2 text-violet-400 font-medium tracking-widest uppercase text-sm">
+          <Zap size={16} className="animate-pulse" /> Focus Mode
         </div>
 
-        {/* Top Right Tools */}
-        <div className="bg-[#1c1c1e] p-2 rounded-xl border border-white/5 flex gap-1">
-          <button className="p-3 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition"><ImageIcon size={20} /></button>
-          <button className="p-3 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition"><Music size={20} /></button>
-          <button className="p-3 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition"><Settings size={20} /></button>
-        </div>
-      </div>
-
-      {/* Center Timer */}
-      <div className="flex-1 flex flex-col items-center justify-center">
-        <div className="text-[8rem] md:text-[10rem] font-bold font-mono tracking-tighter leading-none select-none">
+        <div className="text-[6rem] md:text-[9rem] font-bold font-mono tracking-tighter leading-none tabular-nums bg-gradient-to-b from-white to-gray-500 bg-clip-text text-transparent">
           {formatTime(timeLeft)}
         </div>
-        
-        {/* Input Bar */}
-        <div className="mt-12 bg-[#1c1c1e] p-2 pr-4 rounded-2xl border border-white/5 flex items-center gap-4 shadow-2xl">
-          <div className="flex items-center gap-3 px-4 py-2 border-r border-white/10">
-            <span className="text-gray-500 text-sm">Studying:</span>
+
+        <div className="flex flex-col items-center gap-6 w-full">
+          <div className="flex items-center gap-4 bg-white/5 p-2 rounded-xl border border-white/10 w-full">
+            <span className="text-gray-400 text-sm pl-2">Subject:</span>
             <select 
-              className="bg-transparent text-white font-medium focus:outline-none cursor-pointer"
+              className="bg-transparent text-white font-bold flex-1 outline-none"
               value={selectedSub}
               onChange={(e) => setSelectedSub(e.target.value)}
             >
-              {SUBJECTS.map(s => <option key={s} value={s} className="bg-[#1c1c1e]">{s}</option>)}
+              {SUBJECTS.map(s => <option key={s} value={s} className="bg-gray-900">{s}</option>)}
             </select>
           </div>
 
-          <div className="relative">
-            <button 
-              onClick={() => setShowTaskSelector(!showTaskSelector)}
-              className="flex items-center gap-2 text-gray-300 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 transition text-sm"
-            >
-              <List size={16} />
-              {selectedTask ? selectedTask.text.substring(0, 20) + '...' : 'Select Task (Optional)'}
-            </button>
+          <div className="flex items-center gap-4">
+            {!isActive ? (
+              <button onClick={() => setIsActive(true)} className="h-16 w-16 bg-violet-600 text-white rounded-full flex items-center justify-center hover:scale-110 transition shadow-lg shadow-violet-600/30">
+                <Play fill="white" size={28} />
+              </button>
+            ) : (
+              <button onClick={() => setIsActive(false)} className="h-16 w-16 bg-orange-500 text-white rounded-full flex items-center justify-center hover:scale-110 transition">
+                <Pause fill="white" size={28} />
+              </button>
+            )}
             
-            {/* Task Dropdown */}
-            {showTaskSelector && (
-              <div className="absolute bottom-12 left-0 w-64 bg-[#2c2c2e] rounded-xl border border-white/10 shadow-xl overflow-hidden z-20">
-                <div className="p-2 max-h-48 overflow-y-auto">
-                   <div 
-                     className="p-2 hover:bg-white/10 rounded cursor-pointer text-sm text-gray-300"
-                     onClick={() => { setSelectedTask(null); setShowTaskSelector(false); }}
-                   >
-                     -- No specific task --
-                   </div>
-                   {tasks.filter(t => !t.completed).map(t => (
-                     <div 
-                       key={t.id} 
-                       className="p-2 hover:bg-white/10 rounded cursor-pointer text-sm text-white truncate"
-                       onClick={() => { setSelectedTask(t); setShowTaskSelector(false); }}
-                     >
-                       {t.text}
-                     </div>
-                   ))}
-                </div>
-              </div>
+            {timeLeft > 0 && !isActive && (
+              <button onClick={handleFinish} className="px-6 py-3 bg-white/10 text-white border border-white/10 rounded-xl font-bold hover:bg-white/20 transition">
+                Save
+              </button>
             )}
           </div>
         </div>
 
-        {/* Main Controls */}
-        <div className="mt-12 flex items-center gap-6">
-          <button className="flex items-center gap-2 px-6 py-3 rounded-xl border border-white/10 text-gray-400 hover:bg-white/5 hover:text-white transition">
-            <List size={18} /> Todo
-          </button>
-
-          {!isActive ? (
-            <button 
-              onClick={() => setIsActive(true)}
-              className="flex items-center gap-3 bg-violet-600 hover:bg-violet-700 text-white px-10 py-4 rounded-2xl text-xl font-bold shadow-lg shadow-violet-600/20 hover:shadow-violet-600/40 transition-all hover:scale-105 active:scale-95"
-            >
-              <Play fill="currentColor" size={24} /> Start
-            </button>
-          ) : (
-             <button 
-              onClick={handleStop}
-              className="flex items-center gap-3 bg-red-500 hover:bg-red-600 text-white px-10 py-4 rounded-2xl text-xl font-bold shadow-lg shadow-red-500/20 transition-all hover:scale-105 active:scale-95"
-            >
-              <Pause fill="currentColor" size={24} /> Stop
-            </button>
-          )}
-
-          <button 
-            onClick={() => { setIsActive(false); setTimeLeft(0); }}
-            className="flex items-center gap-2 px-6 py-3 rounded-xl border border-white/10 text-gray-400 hover:bg-white/5 hover:text-white transition"
-          >
-            <RotateCcw size={18} /> Reset
-          </button>
-        </div>
+        <button onClick={onExit} className="absolute top-8 right-8 text-gray-500 hover:text-white transition">
+          <X size={24} />
+        </button>
       </div>
-    </div>
+    </motion.div>
   );
 };
 
+// --- 2. SYLLABUS COMPONENT (11th & 12th Division) ---
+const Syllabus = ({ data, setData }) => {
+  const [selectedSubject, setSelectedSubject] = useState(SUBJECTS[0]);
+  const [gradeView, setGradeView] = useState('11'); // '11' or '12'
 
-// 3. CHAPTER CARD 
-const ChapterCard = ({ subject, chapter, onUpdate, onDelete }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const completedMain = chapter.lectures.filter(l => l).length;
-  const progressPercent = chapter.totalLectures > 0 
-    ? Math.round((completedMain / chapter.totalLectures) * 100) 
-    : 0;
-
-  const toggleLecture = (index) => {
-    const newLectures = [...chapter.lectures];
-    newLectures[index] = !newLectures[index];
-    onUpdate({ ...chapter, lectures: newLectures });
-  };
-
-  const addMiscLecture = () => {
-    const name = prompt("Enter Misc Lecture Name:");
-    if (name) {
-      onUpdate({ 
-        ...chapter, 
-        miscLectures: [...(chapter.miscLectures || []), { name, completed: false }] 
-      });
-    }
-  };
-
-  return (
-    <Card className="mb-4 hover:shadow-md transition-shadow">
-      <div className="flex items-center justify-between cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
-        <div className="flex items-center gap-3">
-          <div className={`p-2 rounded-full ${progressPercent === 100 ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'}`}>
-            {progressPercent === 100 ? <CheckCircle size={20} /> : <BookOpen size={20} />}
-          </div>
-          <div>
-            <h3 className="font-bold text-gray-800 dark:text-white text-lg">{chapter.name}</h3>
-            <p className="text-sm text-gray-500">{completedMain}/{chapter.totalLectures} Lectures • {progressPercent}% Done</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="danger" onClick={(e) => { e.stopPropagation(); onDelete(); }} className="!p-2"><Trash2 size={16} /></Button>
-          <ChevronRight size={20} className={`text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
-        </div>
-      </div>
-
-      {isExpanded && (
-        <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-700">
-          <div className="mb-6">
-            <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-300 mb-3">MAIN LECTURES</h4>
-            <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
-              {Array.from({ length: parseInt(chapter.totalLectures) }).map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => toggleLecture(i)}
-                  className={`p-2 rounded-md text-sm border transition-colors ${
-                    chapter.lectures[i] ? 'bg-amber-500 border-amber-500 text-white' : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-600 text-gray-500'
-                  }`}
-                >
-                  Lec {i + 1}
-                </button>
-              ))}
-            </div>
-          </div>
-          
-          <div className="mb-6 bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg">
-            <div className="flex justify-between items-center mb-3">
-              <h4 className="text-sm font-semibold text-gray-600">MISCELLANEOUS</h4>
-              <button onClick={addMiscLecture} className="text-xs text-amber-600 font-medium hover:underline">+ Add Extra</button>
-            </div>
-            <div className="space-y-2">
-              {chapter.miscLectures?.map((misc, idx) => (
-                <div key={idx} className="flex items-center gap-2">
-                  <input type="checkbox" checked={misc.completed} 
-                    onChange={() => {
-                       const newMisc = [...chapter.miscLectures];
-                       newMisc[idx].completed = !newMisc[idx].completed;
-                       onUpdate({ ...chapter, miscLectures: newMisc });
-                    }}
-                    className="w-4 h-4 text-amber-500 rounded"
-                  />
-                  <span className={`text-sm ${misc.completed ? 'text-gray-400 line-through' : 'text-gray-700 dark:text-gray-300'}`}>{misc.name}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {subject === 'Maths' && (
-            <div className="mb-4 bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-100 dark:border-blue-800">
-              <h4 className="text-sm font-semibold text-blue-800 dark:text-blue-300 mb-2">DIBY Questions</h4>
-              <div className="flex gap-4">
-                <input type="number" placeholder="Total" value={chapter.dibyTotal || 0} onChange={(e) => onUpdate({ ...chapter, dibyTotal: parseInt(e.target.value) || 0 })} className="w-full p-1 text-sm rounded border dark:bg-gray-800" />
-                <input type="number" placeholder="Solved" value={chapter.dibySolved || 0} onChange={(e) => onUpdate({ ...chapter, dibySolved: parseInt(e.target.value) || 0 })} className="w-full p-1 text-sm rounded border dark:bg-gray-800" />
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-    </Card>
-  );
-};
-
-// --- MAIN APP COMPONENT ---
-
-export default function App() {
-  const [data, setData] = useState(() => {
-    const saved = localStorage.getItem('jeePlannerData');
-    return saved ? JSON.parse(saved) : INITIAL_DATA;
-  });
-  const [activeTab, setActiveTab] = useState('Dashboard');
-  const [selectedSubject, setSelectedSubject] = useState('Physics');
-
-  useEffect(() => {
-    localStorage.setItem('jeePlannerData', JSON.stringify(data));
-    if (data.darkMode) document.documentElement.classList.add('dark');
-    else document.documentElement.classList.remove('dark');
-  }, [data]);
-
-  const toggleDarkMode = () => setData(prev => ({ ...prev, darkMode: !prev.darkMode }));
-
-  // ACTIONS
-  const addChapter = (sub) => {
-    const name = prompt("Enter Chapter Name:");
+  const addChapter = () => {
+    const name = prompt(`Enter Class ${gradeView} Chapter Name:`);
+    if (!name) return;
     const lectures = prompt("Total Main Lectures:");
+    
     if (name && lectures) {
       const newChapter = {
         id: Date.now().toString(),
         name,
         totalLectures: parseInt(lectures),
         lectures: new Array(parseInt(lectures)).fill(false),
-        miscLectures: [],
-        dibyTotal: 0, dibySolved: 0
+        grade: gradeView // Crucial: Tagging the chapter with the grade
       };
       const newData = { ...data };
-      newData.subjects[sub].chapters.push(newChapter);
+      newData.subjects[selectedSubject].chapters.push(newChapter);
       setData(newData);
     }
   };
 
-  const updateChapter = (sub, updated) => {
+  const updateChapter = (updated) => {
     const newData = { ...data };
-    const idx = newData.subjects[sub].chapters.findIndex(c => c.id === updated.id);
-    newData.subjects[sub].chapters[idx] = updated;
+    const idx = newData.subjects[selectedSubject].chapters.findIndex(c => c.id === updated.id);
+    newData.subjects[selectedSubject].chapters[idx] = updated;
     setData(newData);
   };
 
-  const deleteChapter = (sub, id) => {
+  const deleteChapter = (id) => {
     if(window.confirm("Delete chapter?")) {
       const newData = { ...data };
-      newData.subjects[sub].chapters = newData.subjects[sub].chapters.filter(c => c.id !== id);
+      newData.subjects[selectedSubject].chapters = newData.subjects[selectedSubject].chapters.filter(c => c.id !== id);
       setData(newData);
     }
   };
 
-  const saveStudyTime = (subject, seconds) => {
-    const newData = { ...data };
-    newData.subjects[subject].timeSpent += seconds;
-    const today = new Date().toISOString().split('T')[0];
-    const existingEntry = newData.studyLog.find(e => e.date === today);
-    if (existingEntry) existingEntry.minutes += Math.round(seconds / 60);
-    else {
-      newData.studyLog.push({ date: today, minutes: Math.round(seconds / 60) });
-      if (newData.studyLog.length > 7) newData.studyLog.shift();
-    }
-    setData(newData);
-  };
-
-  // RENDERING
-  const renderDashboard = () => (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in">
-      <div className="lg:col-span-2 space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Dashboard</h2>
-            <p className="text-gray-500">Welcome back, Aspirant.</p>
-          </div>
-          <Button onClick={() => {
-            const t = prompt("New Task:");
-            if(t) setData(prev => ({ ...prev, tasks: [{id: Date.now(), text: t, completed: false, subject: 'General'}, ...prev.tasks] }));
-          }}><Plus size={18} /> Add Task</Button>
-        </div>
-
-        {/* Notepad */}
-        <Card>
-          <h3 className="font-bold text-gray-700 dark:text-gray-200 mb-2">Rough Notes</h3>
-          <textarea 
-            className="w-full h-24 p-2 rounded border dark:bg-gray-700 dark:border-gray-600 focus:ring-2 focus:ring-amber-500"
-            value={data.notepad}
-            onChange={e => setData({...data, notepad: e.target.value})}
-            placeholder="Quick notes..."
-          />
-        </Card>
-
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-           <Card className="h-64">
-             <h4 className="font-bold mb-2 dark:text-gray-300">Study Trend</h4>
-             <ResponsiveContainer width="100%" height="100%">
-               <LineChart data={data.studyLog}>
-                 <XAxis dataKey="date" hide />
-                 <YAxis />
-                 <RechartsTooltip />
-                 <Line type="monotone" dataKey="minutes" stroke="#f59e0b" strokeWidth={3} dot={{r:4}} />
-               </LineChart>
-             </ResponsiveContainer>
-           </Card>
-           <Card className="h-64">
-              <h4 className="font-bold mb-2 dark:text-gray-300">Subject Distribution (Hrs)</h4>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={SUBJECTS.map(s => ({ name: s.slice(0,3), hours: Math.round(data.subjects[s].timeSpent/3600) }))}>
-                  <XAxis dataKey="name" />
-                  <Bar dataKey="hours" fill="#3b82f6" radius={[4,4,0,0]} />
-                </BarChart>
-              </ResponsiveContainer>
-           </Card>
-        </div>
-
-        {/* Tasks */}
-        <Card>
-          <h3 className="font-bold mb-4 dark:text-white">Today's Tasks</h3>
-          <div className="space-y-2 max-h-60 overflow-y-auto">
-            {data.tasks.map(task => (
-              <div key={task.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <input type="checkbox" checked={task.completed} 
-                    onChange={() => setData(prev => ({...prev, tasks: prev.tasks.map(t => t.id === task.id ? {...t, completed: !t.completed} : t)}))}
-                    className="w-5 h-5 text-amber-500 rounded"
-                  />
-                  <span className={task.completed ? 'line-through text-gray-400' : 'dark:text-gray-200'}>{task.text}</span>
-                </div>
-                <button onClick={() => setData(prev => ({...prev, tasks: prev.tasks.filter(t => t.id !== task.id)}))} className="text-gray-400 hover:text-red-500"><Trash2 size={16}/></button>
-              </div>
-            ))}
-            {data.tasks.length === 0 && <p className="text-center text-gray-400">No tasks yet.</p>}
-          </div>
-        </Card>
-      </div>
-
-      <div className="space-y-6">
-        {/* Quick Syllabus */}
-        <Card>
-          <h3 className="font-bold mb-4 dark:text-white">Syllabus Progress</h3>
-          <div className="space-y-4">
-            {SUBJECTS.map(sub => {
-              const chaps = data.subjects[sub].chapters;
-              const total = chaps.length;
-              const done = chaps.filter(c => c.lectures.length > 0 && c.lectures.every(l => l)).length;
-              return total > 0 ? (
-                <div key={sub}>
-                   <div className="flex justify-between text-xs mb-1 dark:text-gray-300"><span>{sub}</span><span>{done}/{total}</span></div>
-                   <div className="h-1 bg-gray-100 dark:bg-gray-700 rounded-full"><div className="h-full bg-blue-500 rounded-full" style={{width: `${(done/total)*100}%`}}/></div>
-                </div>
-              ) : null;
-            })}
-          </div>
-        </Card>
-      </div>
-    </div>
+  // Filter chapters based on selected Grade
+  const filteredChapters = data.subjects[selectedSubject].chapters.filter(
+    c => c.grade === gradeView || (!c.grade && gradeView === '11') // Legacy support: Default old chapters to 11
   );
 
-  const renderSyllabus = () => (
-    <div className="space-y-6 animate-in fade-in">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold dark:text-white">Syllabus</h2>
-        <Button onClick={() => addChapter(selectedSubject)}><Plus size={18} /> New Chapter</Button>
+  return (
+    <div className="space-y-6 max-w-5xl mx-auto">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-white mb-2">Syllabus Tracker</h1>
+          <p className="text-gray-400">Organized by Class 11 & 12</p>
+        </div>
+        <button onClick={addChapter} className="px-6 py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-bold shadow-lg shadow-violet-600/20 flex items-center gap-2">
+          <Plus size={18} /> Add {selectedSubject} Ch ({gradeView}th)
+        </button>
       </div>
-      <div className="flex gap-2 overflow-x-auto pb-2">
+
+      {/* Grade Toggles */}
+      <div className="flex gap-4 p-1 bg-white/5 w-fit rounded-xl">
+        {['11', '12'].map(g => (
+          <button
+            key={g}
+            onClick={() => setGradeView(g)}
+            className={`px-8 py-2 rounded-lg text-sm font-bold transition-all ${gradeView === g ? 'bg-violet-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
+          >
+            Class {g}th
+          </button>
+        ))}
+      </div>
+
+      {/* Subject Tabs */}
+      <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
         {SUBJECTS.map(s => (
           <button key={s} onClick={() => setSelectedSubject(s)} 
-            className={`px-4 py-2 rounded-full whitespace-nowrap text-sm font-medium transition ${selectedSubject === s ? 'bg-amber-500 text-white' : 'bg-white dark:bg-gray-800 dark:text-gray-300 border hover:bg-gray-50'}`}>
+            className={`px-6 py-3 rounded-xl whitespace-nowrap text-sm font-bold transition ${selectedSubject === s ? 'bg-white text-black' : 'bg-[#121212] border border-white/10 text-gray-400 hover:bg-white/5'}`}>
             {s}
           </button>
         ))}
       </div>
-      <div>
-        {data.subjects[selectedSubject].chapters.map(c => (
-          <ChapterCard key={c.id} subject={selectedSubject} chapter={c} onUpdate={u => updateChapter(selectedSubject, u)} onDelete={() => deleteChapter(selectedSubject, c.id)} />
+
+      {/* Chapters Grid */}
+      <div className="grid grid-cols-1 gap-4">
+        {filteredChapters.map(chapter => (
+           <ChapterItem key={chapter.id} chapter={chapter} onUpdate={updateChapter} onDelete={deleteChapter} />
         ))}
-        {data.subjects[selectedSubject].chapters.length === 0 && <div className="text-center py-20 text-gray-400">No chapters added.</div>}
+        {filteredChapters.length === 0 && (
+          <div className="text-center py-20 border border-dashed border-white/10 rounded-2xl text-gray-600">
+            No Class {gradeView} chapters added for {selectedSubject} yet.
+          </div>
+        )}
       </div>
     </div>
   );
+};
+
+const ChapterItem = ({ chapter, onUpdate, onDelete }) => {
+  const [expanded, setExpanded] = useState(false);
+  const completed = chapter.lectures.filter(l => l).length;
+  const progress = chapter.totalLectures > 0 ? Math.round((completed/chapter.totalLectures)*100) : 0;
+
+  const toggleLec = (i) => {
+    const newLecs = [...chapter.lectures];
+    newLecs[i] = !newLecs[i];
+    onUpdate({ ...chapter, lectures: newLecs });
+  };
 
   return (
-    <div className={`flex min-h-screen bg-gray-50 dark:bg-gray-900 font-sans ${data.darkMode ? 'dark' : ''}`}>
-      {/* Sidebar */}
-      <aside className="w-20 lg:w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 fixed h-full z-10 hidden md:flex flex-col justify-between">
-        <div>
-          <div className="p-6 flex items-center gap-3 text-amber-500 font-bold text-xl"><div className="w-8 h-8 bg-amber-500 text-white flex items-center justify-center rounded-lg">J</div><span className="hidden lg:block">JEE Tracker</span></div>
-          <nav className="mt-6 px-4 space-y-2">
-            {[
-              { id: 'Dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-              { id: 'Syllabus', icon: BookOpen, label: 'Syllabus' },
-              { id: 'Focus', icon: Clock, label: 'Focus Mode' }, // <--- NEW TAB
-            ].map(item => (
-              <button key={item.id} onClick={() => setActiveTab(item.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${activeTab === item.id ? 'bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400' : 'text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-gray-700'}`}>
-                <item.icon size={20} /> <span className="hidden lg:block">{item.label}</span>
+    <GlassCard className="transition-all">
+      <div className="flex items-center justify-between cursor-pointer" onClick={() => setExpanded(!expanded)}>
+        <div className="flex items-center gap-4">
+          <div className={`p-3 rounded-full ${progress===100 ? 'bg-green-500/20 text-green-500' : 'bg-violet-500/20 text-violet-500'}`}>
+            {progress===100 ? <CheckCircle size={24} /> : <BookOpen size={24} />}
+          </div>
+          <div>
+            <h3 className="text-xl font-bold text-white">{chapter.name}</h3>
+            <p className="text-sm text-gray-400">{completed}/{chapter.totalLectures} Lectures • {progress}% Complete</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={(e) => { e.stopPropagation(); onDelete(chapter.id); }} className="p-2 text-gray-600 hover:text-red-500 transition"><Trash2 size={18}/></button>
+          <ChevronRight className={`text-gray-500 transition-transform ${expanded ? 'rotate-90' : ''}`} />
+        </div>
+      </div>
+
+      {expanded && (
+        <motion.div initial={{opacity:0, height:0}} animate={{opacity:1, height:'auto'}} className="mt-6 pt-6 border-t border-white/5">
+          <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
+            {chapter.lectures.map((done, i) => (
+              <button key={i} onClick={() => toggleLec(i)} className={`p-2 rounded-lg text-sm font-bold border transition ${done ? 'bg-violet-600 border-violet-600 text-white' : 'bg-transparent border-white/10 text-gray-500 hover:border-violet-500'}`}>
+                Lec {i+1}
               </button>
             ))}
-          </nav>
-        </div>
-        <div className="p-4">
-          <button onClick={toggleDarkMode} className="w-full flex items-center justify-center lg:justify-start gap-3 p-3 text-gray-500 hover:text-amber-500 transition">
-            {data.darkMode ? <Sun size={20} /> : <Moon size={20} />} <span className="hidden lg:block">{data.darkMode ? 'Light' : 'Dark'}</span>
+          </div>
+        </motion.div>
+      )}
+    </GlassCard>
+  );
+};
+
+// --- 3. DASHBOARD (Updated with New Graph) ---
+const Dashboard = ({ data, setData, startFocus }) => {
+  const today = new Date().toISOString().split('T')[0];
+  const todayMins = data.history?.[today] || 0;
+  
+  // XP Logic: 1 XP per minute (No levels)
+  const xp = data.xp || 0;
+
+  // Streak Logic
+  const getStreak = () => {
+    // Simplified streak logic for UI demo
+    return 3; // Placeholder or calculate from history if available
+  };
+
+  // --- NEW GRAPH LOGIC (This Week's Progress) ---
+  const getWeeklyData = () => {
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const todayIndex = new Date().getDay(); // 0-6
+    const chartData = [];
+
+    // Generate last 7 days data
+    for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const dateStr = d.toISOString().split('T')[0];
+        const dayName = days[d.getDay()];
+        const mins = data.history?.[dateStr] || 0;
+        
+        chartData.push({
+            name: dayName,
+            hours: parseFloat((mins / 60).toFixed(1))
+        });
+    }
+    return chartData;
+  };
+
+  // --- TASK ACTIONS ---
+  const addTask = () => {
+    const t = prompt("What is your main task?");
+    if(t) {
+      const newTask = { id: Date.now(), text: t, completed: false, subject: 'General' };
+      setData(prev => ({ ...prev, tasks: [newTask, ...prev.tasks] }));
+    }
+  };
+
+  const toggleTask = (id) => {
+    setData(prev => ({
+      ...prev,
+      tasks: prev.tasks.map(t => t.id === id ? { ...t, completed: !t.completed } : t)
+    }));
+  };
+
+  const removeTask = (id) => {
+    setData(prev => ({ ...prev, tasks: prev.tasks.filter(t => t.id !== id) }));
+  };
+
+  return (
+    <div className="space-y-6 max-w-7xl mx-auto">
+      
+      {/* 1. WELCOME HEADER */}
+      <div className="bg-[#121212] border border-white/10 p-8 rounded-2xl relative overflow-hidden">
+        <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
+          <div>
+            <h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-2">
+              Good afternoon, Aspirant! <span className="animate-pulse">👋</span>
+            </h1>
+            <p className="text-gray-400">Ready for another productive study session?</p>
+            <div className="mt-4 flex items-center gap-2 text-sm font-bold text-orange-500">
+               <Flame size={16} fill="currentColor" /> {getStreak()} day streak!
+            </div>
+          </div>
+          <button 
+            onClick={startFocus}
+            className="px-8 py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-lg font-bold shadow-lg shadow-violet-600/30 flex items-center gap-2 transition-transform active:scale-95"
+          >
+            <Play size={18} fill="currentColor" /> Start Studying
           </button>
+        </div>
+      </div>
+
+      {/* 2. STATS ROW (Cleaned Up) */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <GlassCard className="flex flex-col justify-between h-32">
+          <div className="flex justify-between items-start">
+            <span className="text-gray-500 text-xs font-bold uppercase tracking-wider">Time Today</span>
+            <Clock size={16} className="text-violet-500" />
+          </div>
+          <div className="text-3xl font-bold text-white">
+            {Math.floor(todayMins/60)}h {Math.round(todayMins%60)}m
+          </div>
+          <div className="text-xs text-gray-500">Goal: {data.dailyGoal}h</div>
+        </GlassCard>
+
+        <GlassCard className="flex flex-col justify-between h-32">
+          <div className="flex justify-between items-start">
+            <span className="text-gray-500 text-xs font-bold uppercase tracking-wider">Total XP</span>
+            <Award size={16} className="text-yellow-500" />
+          </div>
+          <div className="text-3xl font-bold text-white">{xp.toLocaleString()}</div>
+          <div className="text-xs text-gray-500">1 min = 1 XP</div>
+        </GlassCard>
+
+        <GlassCard className="col-span-1 md:col-span-2 flex flex-col justify-between h-32">
+           <div className="flex justify-between items-start">
+            <span className="text-gray-500 text-xs font-bold uppercase tracking-wider">Progress</span>
+            <Trophy size={16} className="text-green-500" />
+          </div>
+          <div className="w-full">
+            <div className="flex justify-between text-white font-bold mb-2">
+               <span>{Math.round((todayMins / (data.dailyGoal*60)) * 100)}%</span>
+               <span className="text-gray-500 text-sm">Target: {data.dailyGoal}h</span>
+            </div>
+            <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-violet-600 shadow-[0_0_10px_rgba(139,92,246,0.5)] transition-all duration-1000" 
+                  style={{ width: `${Math.min((todayMins / (data.dailyGoal*60)) * 100, 100)}%` }} 
+                />
+            </div>
+          </div>
+        </GlassCard>
+      </div>
+
+      {/* 3. NEW GRAPH (Purple Wave) & TASKS */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* GRAPH */}
+        <GlassCard className="lg:col-span-2 min-h-[350px] flex flex-col">
+          <h3 className="text-lg font-bold text-white mb-6">This Week's Progress</h3>
+          <div className="flex-1 w-full min-h-[250px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={getWeeklyData()}>
+                <defs>
+                  <linearGradient id="colorHours" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.8}/>
+                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                <XAxis 
+                  dataKey="name" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{fill: '#9ca3af', fontSize: 12}} 
+                  dy={10}
+                />
+                <YAxis hide domain={[0, 'auto']} />
+                <RechartsTooltip 
+                  contentStyle={{backgroundColor: '#18181b', borderColor: '#27272a', borderRadius: '8px', color: '#fff'}}
+                  itemStyle={{color: '#a78bfa'}}
+                  formatter={(value) => [`${value} hrs`, "Study Time"]}
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="hours" 
+                  stroke="#8b5cf6" 
+                  strokeWidth={3}
+                  fillOpacity={1} 
+                  fill="url(#colorHours)" 
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </GlassCard>
+
+        {/* TASKS LIST */}
+        <GlassCard>
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-lg font-bold text-white">To Do</h3>
+            <button onClick={addTask} className="text-xs px-3 py-1 bg-white/10 text-white rounded hover:bg-white/20 transition">+ Add</button>
+          </div>
+          <div className="space-y-3 max-h-[280px] overflow-y-auto pr-2">
+            {data.tasks.map(task => (
+              <div key={task.id} className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5 hover:border-violet-500/50 transition group">
+                <div className="flex items-center gap-3">
+                  <div 
+                    onClick={() => toggleTask(task.id)}
+                    className={`w-5 h-5 rounded-full border-2 border-gray-600 group-hover:border-violet-500 cursor-pointer flex items-center justify-center ${task.completed ? 'bg-violet-500 border-violet-500' : ''}`}
+                  >
+                    {task.completed && <CheckCircle size={12} className="text-white" />}
+                  </div>
+                  <span className={task.completed ? 'text-gray-500 line-through text-sm' : 'text-gray-200 text-sm'}>{task.text}</span>
+                </div>
+                <button onClick={() => removeTask(task.id)} className="text-gray-600 hover:text-red-500 opacity-0 group-hover:opacity-100 transition"><X size={14}/></button>
+              </div>
+            ))}
+            {data.tasks.length === 0 && <div className="text-center text-gray-600 text-sm py-8">No active tasks</div>}
+          </div>
+        </GlassCard>
+      </div>
+    </div>
+  );
+};
+
+// --- MAIN APP SHELL ---
+export default function App() {
+  const [data, setData] = useState(() => {
+    const saved = localStorage.getItem('jeeTrackerPro');
+    // Migration: If old data exists, we might need to reset or adapt. 
+    // For safety in this demo, we use INITIAL_DATA if structure is vastly different, 
+    // or you can merge. Here we use basic load.
+    return saved ? JSON.parse(saved) : INITIAL_DATA;
+  });
+  const [view, setView] = useState('dashboard');
+
+  useEffect(() => {
+    localStorage.setItem('jeeTrackerPro', JSON.stringify(data));
+    document.documentElement.classList.add('dark');
+  }, [data]);
+
+  const saveSession = (subject, seconds) => {
+    const mins = parseFloat((seconds/60).toFixed(2));
+    const today = new Date().toISOString().split('T')[0];
+    
+    // XP Logic: 1 Minute = 1 XP
+    const gainedXp = Math.floor(mins); 
+
+    setData(prev => {
+      const prevMins = prev.history?.[today] || 0;
+      const prevHistory = prev.history || {};
+      
+      return {
+        ...prev,
+        subjects: {
+          ...prev.subjects,
+          [subject]: { ...prev.subjects[subject], timeSpent: prev.subjects[subject].timeSpent + seconds }
+        },
+        history: { ...prevHistory, [today]: prevMins + mins },
+        xp: (prev.xp || 0) + gainedXp,
+      };
+    });
+    setView('dashboard');
+  };
+
+  return (
+    <div className="min-h-screen bg-[#09090b] text-gray-200 font-sans selection:bg-violet-500/30">
+      <AnimatePresence>
+        {view === 'zen' && (
+          <ZenTimer data={data} onSaveSession={saveSession} onExit={() => setView('dashboard')} />
+        )}
+      </AnimatePresence>
+
+      <aside className="fixed left-0 top-0 h-full w-20 bg-[#09090b] border-r border-white/10 flex flex-col items-center py-8 z-40 hidden md:flex">
+        <div className="mb-12 p-3 bg-violet-600 rounded-xl shadow-lg shadow-violet-600/20">
+          <Zap size={24} className="text-white" />
+        </div>
+        
+        <nav className="flex flex-col gap-8 w-full">
+          {[
+            { id: 'dashboard', icon: LayoutDashboard },
+            { id: 'syllabus', icon: BookOpen },
+          ].map(item => (
+            <button 
+              key={item.id}
+              onClick={() => setView(item.id)}
+              className={`w-full flex justify-center py-3 border-l-2 transition-all duration-300 ${view === item.id ? 'border-violet-500 text-white' : 'border-transparent text-gray-600 hover:text-violet-400'}`}
+            >
+              <item.icon size={24} />
+            </button>
+          ))}
+        </nav>
+
+        <div className="mt-auto">
+          <button className="p-3 text-gray-600 hover:text-white transition"><Settings size={24} /></button>
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 md:ml-20 lg:ml-64 p-4 md:p-8 overflow-x-hidden">
-        {/* Mobile Header */}
-        <div className="md:hidden flex justify-between items-center mb-6">
-           <span className="font-bold text-lg dark:text-white">JEE Tracker</span>
-           <div className="flex gap-4">
-             <button onClick={() => setActiveTab('Dashboard')}><LayoutDashboard /></button>
-             <button onClick={() => setActiveTab('Focus')}><Clock /></button>
-           </div>
-        </div>
-
-        {activeTab === 'Dashboard' && renderDashboard()}
-        {activeTab === 'Syllabus' && renderSyllabus()}
-        {activeTab === 'Focus' && (
-          <FocusMode 
-            subjects={SUBJECTS} 
-            data={data} 
-            tasks={data.tasks}
-            onSaveTime={saveStudyTime} 
-          />
-        )}
+      <main className="md:ml-20 p-6 md:p-10 pb-24">
+        {view === 'dashboard' && <Dashboard data={data} setData={setData} startFocus={() => setView('zen')} />}
+        {view === 'syllabus' && <Syllabus data={data} setData={setData} />}
       </main>
+
+      {/* Mobile Nav */}
+      <div className="md:hidden fixed bottom-0 left-0 w-full bg-[#09090b]/90 backdrop-blur-md border-t border-white/10 p-4 flex justify-around z-40">
+        <button onClick={() => setView('dashboard')} className={view === 'dashboard' ? 'text-violet-500' : 'text-gray-500'}><LayoutDashboard /></button>
+        <button onClick={() => setView('zen')} className="bg-white text-black p-4 rounded-full -mt-8 shadow-lg shadow-white/20"><Play fill="black" /></button>
+        <button onClick={() => setView('syllabus')} className={view === 'syllabus' ? 'text-violet-500' : 'text-gray-500'}><BookOpen /></button>
+      </div>
     </div>
   );
 }
