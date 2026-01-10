@@ -465,6 +465,17 @@ export default function App() {
     return saved ? JSON.parse(saved) : INITIAL_DATA;
   });
   const [view, setView] = useState('dashboard');
+  const exportData = () => {
+  const blob = new Blob(
+    [JSON.stringify(data, null, 2)],
+    { type: "application/json" }
+  );
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "jee-tracker-backup.json";
+  a.click();
+};
 
   useEffect(() => {
     localStorage.setItem('jeeTrackerPro', JSON.stringify(data));
