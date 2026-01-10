@@ -10,10 +10,8 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 
 /**
- * JEE TRACKER PRO - v5.0 (Clean Architecture)
- * - Removed Levels, Heatmaps, Focus Score
- * - Added Class 11/12 Division
- * - New Graph Style
+ * JEE TRACKER PRO - v5.1 (Real Streak Logic)
+ * - Fixed: Streak now calculates based on 2 hours (120 mins) threshold
  */
 
 // --- CONSTANTS ---
@@ -21,14 +19,15 @@ const SUBJECTS = ["Physics", "Maths", "Organic Chem", "Inorganic Chem", "Physica
 
 const INITIAL_DATA = {
   notepad: "",
-  dailyGoal: 10, // Updated to 10 hours
+  dailyGoal: 10,
   tasks: [],
   subjects: SUBJECTS.reduce((acc, sub) => ({
     ...acc,
     [sub]: { chapters: [], timeSpent: 0 }
   }), {}),
   studyLog: [],
-  xp: 0, // 1 XP = 1 Minute
+  history: {}, // Format: { "2024-01-01": 150 } (minutes)
+  xp: 0, 
   darkMode: true
 };
 
@@ -41,12 +40,6 @@ const GlassCard = ({ children, className = "", hover = false }) => (
   >
     {children}
   </motion.div>
-);
-
-const Badge = ({ icon: Icon, label, color }) => (
-  <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold border ${color}`}>
-    <Icon size={12} /> {label}
-  </div>
 );
 
 // --- 1. ZEN FOCUS MODE ---
@@ -130,10 +123,10 @@ const ZenTimer = ({ data, onSaveSession, onExit }) => {
   );
 };
 
-// --- 2. SYLLABUS COMPONENT (11th & 12th Division) ---
+// --- 2. SYLLABUS COMPONENT ---
 const Syllabus = ({ data, setData }) => {
   const [selectedSubject, setSelectedSubject] = useState(SUBJECTS[0]);
-  const [gradeView, setGradeView] = useState('11'); // '11' or '12'
+  const [gradeView, setGradeView] = useState('11');
 
   const addChapter = () => {
     const name = prompt(`Enter Class ${gradeView} Chapter Name:`);
@@ -146,7 +139,7 @@ const Syllabus = ({ data, setData }) => {
         name,
         totalLectures: parseInt(lectures),
         lectures: new Array(parseInt(lectures)).fill(false),
-        grade: gradeView // Crucial: Tagging the chapter with the grade
+        grade: gradeView
       };
       const newData = { ...data };
       newData.subjects[selectedSubject].chapters.push(newChapter);
@@ -169,9 +162,8 @@ const Syllabus = ({ data, setData }) => {
     }
   };
 
-  // Filter chapters based on selected Grade
   const filteredChapters = data.subjects[selectedSubject].chapters.filter(
-    c => c.grade === gradeView || (!c.grade && gradeView === '11') // Legacy support: Default old chapters to 11
+    c => c.grade === gradeView || (!c.grade && gradeView === '11')
   );
 
   return (
@@ -186,7 +178,6 @@ const Syllabus = ({ data, setData }) => {
         </button>
       </div>
 
-      {/* Grade Toggles */}
       <div className="flex gap-4 p-1 bg-white/5 w-fit rounded-xl">
         {['11', '12'].map(g => (
           <button
@@ -199,7 +190,6 @@ const Syllabus = ({ data, setData }) => {
         ))}
       </div>
 
-      {/* Subject Tabs */}
       <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
         {SUBJECTS.map(s => (
           <button key={s} onClick={() => setSelectedSubject(s)} 
@@ -209,7 +199,6 @@ const Syllabus = ({ data, setData }) => {
         ))}
       </div>
 
-      {/* Chapters Grid */}
       <div className="grid grid-cols-1 gap-4">
         {filteredChapters.map(chapter => (
            <ChapterItem key={chapter.id} chapter={chapter} onUpdate={updateChapter} onDelete={deleteChapter} />
@@ -268,34 +257,50 @@ const ChapterItem = ({ chapter, onUpdate, onDelete }) => {
   );
 };
 
-// --- 3. DASHBOARD (Updated with New Graph) ---
+// --- 3. DASHBOARD ---
 const Dashboard = ({ data, setData, startFocus }) => {
   const today = new Date().toISOString().split('T')[0];
   const todayMins = data.history?.[today] || 0;
-  
-  // XP Logic: 1 XP per minute (No levels)
   const xp = data.xp || 0;
 
-  // Streak Logic
+  // --- REAL STREAK LOGIC ---
   const getStreak = () => {
-    // Simplified streak logic for UI demo
-    return 3; // Placeholder or calculate from history if available
+    let streak = 0;
+    const history = data.history || {};
+    const threshold = 120; // 2 Hours in minutes
+
+    // 1. Check Today
+    if ((history[today] || 0) >= threshold) {
+      streak++;
+    }
+
+    // 2. Check Backwards from Yesterday
+    let d = new Date();
+    d.setDate(d.getDate() - 1); // Start from yesterday
+
+    while (true) {
+      const dateStr = d.toISOString().split('T')[0];
+      const mins = history[dateStr] || 0;
+      
+      if (mins >= threshold) {
+        streak++;
+        d.setDate(d.getDate() - 1); // Go back one more day
+      } else {
+        break; // Streak broken
+      }
+    }
+    return streak;
   };
 
-  // --- NEW GRAPH LOGIC (This Week's Progress) ---
   const getWeeklyData = () => {
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const todayIndex = new Date().getDay(); // 0-6
     const chartData = [];
-
-    // Generate last 7 days data
     for (let i = 6; i >= 0; i--) {
         const d = new Date();
         d.setDate(d.getDate() - i);
         const dateStr = d.toISOString().split('T')[0];
         const dayName = days[d.getDay()];
         const mins = data.history?.[dateStr] || 0;
-        
         chartData.push({
             name: dayName,
             hours: parseFloat((mins / 60).toFixed(1))
@@ -304,7 +309,6 @@ const Dashboard = ({ data, setData, startFocus }) => {
     return chartData;
   };
 
-  // --- TASK ACTIONS ---
   const addTask = () => {
     const t = prompt("What is your main task?");
     if(t) {
@@ -326,7 +330,6 @@ const Dashboard = ({ data, setData, startFocus }) => {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
-      
       {/* 1. WELCOME HEADER */}
       <div className="bg-[#121212] border border-white/10 p-8 rounded-2xl relative overflow-hidden">
         <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
@@ -335,7 +338,7 @@ const Dashboard = ({ data, setData, startFocus }) => {
               Good afternoon, Aspirant! <span className="animate-pulse">👋</span>
             </h1>
             <p className="text-gray-400">Ready for another productive study session?</p>
-            <div className="mt-4 flex items-center gap-2 text-sm font-bold text-orange-500">
+            <div className={`mt-4 flex items-center gap-2 text-sm font-bold ${getStreak() > 0 ? 'text-orange-500' : 'text-gray-500'}`}>
                <Flame size={16} fill="currentColor" /> {getStreak()} day streak!
             </div>
           </div>
@@ -348,7 +351,7 @@ const Dashboard = ({ data, setData, startFocus }) => {
         </div>
       </div>
 
-      {/* 2. STATS ROW (Cleaned Up) */}
+      {/* 2. STATS ROW */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <GlassCard className="flex flex-col justify-between h-32">
           <div className="flex justify-between items-start">
@@ -390,10 +393,8 @@ const Dashboard = ({ data, setData, startFocus }) => {
         </GlassCard>
       </div>
 
-      {/* 3. NEW GRAPH (Purple Wave) & TASKS */}
+      {/* 3. GRAPH & TASKS */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* GRAPH */}
         <GlassCard className="lg:col-span-2 min-h-[350px] flex flex-col">
           <h3 className="text-lg font-bold text-white mb-6">This Week's Progress</h3>
           <div className="flex-1 w-full min-h-[250px]">
@@ -406,33 +407,15 @@ const Dashboard = ({ data, setData, startFocus }) => {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
-                <XAxis 
-                  dataKey="name" 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{fill: '#9ca3af', fontSize: 12}} 
-                  dy={10}
-                />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#9ca3af', fontSize: 12}} dy={10} />
                 <YAxis hide domain={[0, 'auto']} />
-                <RechartsTooltip 
-                  contentStyle={{backgroundColor: '#18181b', borderColor: '#27272a', borderRadius: '8px', color: '#fff'}}
-                  itemStyle={{color: '#a78bfa'}}
-                  formatter={(value) => [`${value} hrs`, "Study Time"]}
-                />
-                <Area 
-                  type="monotone" 
-                  dataKey="hours" 
-                  stroke="#8b5cf6" 
-                  strokeWidth={3}
-                  fillOpacity={1} 
-                  fill="url(#colorHours)" 
-                />
+                <RechartsTooltip contentStyle={{backgroundColor: '#18181b', borderColor: '#27272a', borderRadius: '8px', color: '#fff'}} itemStyle={{color: '#a78bfa'}} formatter={(value) => [`${value} hrs`, "Study Time"]} />
+                <Area type="monotone" dataKey="hours" stroke="#8b5cf6" strokeWidth={3} fillOpacity={1} fill="url(#colorHours)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </GlassCard>
 
-        {/* TASKS LIST */}
         <GlassCard>
           <div className="flex justify-between items-center mb-6">
             <h3 className="text-lg font-bold text-white">To Do</h3>
@@ -465,9 +448,6 @@ const Dashboard = ({ data, setData, startFocus }) => {
 export default function App() {
   const [data, setData] = useState(() => {
     const saved = localStorage.getItem('jeeTrackerPro');
-    // Migration: If old data exists, we might need to reset or adapt. 
-    // For safety in this demo, we use INITIAL_DATA if structure is vastly different, 
-    // or you can merge. Here we use basic load.
     return saved ? JSON.parse(saved) : INITIAL_DATA;
   });
   const [view, setView] = useState('dashboard');
@@ -480,14 +460,11 @@ export default function App() {
   const saveSession = (subject, seconds) => {
     const mins = parseFloat((seconds/60).toFixed(2));
     const today = new Date().toISOString().split('T')[0];
-    
-    // XP Logic: 1 Minute = 1 XP
     const gainedXp = Math.floor(mins); 
 
     setData(prev => {
       const prevMins = prev.history?.[today] || 0;
       const prevHistory = prev.history || {};
-      
       return {
         ...prev,
         subjects: {
@@ -504,34 +481,24 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#09090b] text-gray-200 font-sans selection:bg-violet-500/30">
       <AnimatePresence>
-        {view === 'zen' && (
-          <ZenTimer data={data} onSaveSession={saveSession} onExit={() => setView('dashboard')} />
-        )}
+        {view === 'zen' && <ZenTimer data={data} onSaveSession={saveSession} onExit={() => setView('dashboard')} />}
       </AnimatePresence>
 
       <aside className="fixed left-0 top-0 h-full w-20 bg-[#09090b] border-r border-white/10 flex flex-col items-center py-8 z-40 hidden md:flex">
         <div className="mb-12 p-3 bg-violet-600 rounded-xl shadow-lg shadow-violet-600/20">
           <Zap size={24} className="text-white" />
         </div>
-        
         <nav className="flex flex-col gap-8 w-full">
           {[
             { id: 'dashboard', icon: LayoutDashboard },
             { id: 'syllabus', icon: BookOpen },
           ].map(item => (
-            <button 
-              key={item.id}
-              onClick={() => setView(item.id)}
-              className={`w-full flex justify-center py-3 border-l-2 transition-all duration-300 ${view === item.id ? 'border-violet-500 text-white' : 'border-transparent text-gray-600 hover:text-violet-400'}`}
-            >
+            <button key={item.id} onClick={() => setView(item.id)} className={`w-full flex justify-center py-3 border-l-2 transition-all duration-300 ${view === item.id ? 'border-violet-500 text-white' : 'border-transparent text-gray-600 hover:text-violet-400'}`}>
               <item.icon size={24} />
             </button>
           ))}
         </nav>
-
-        <div className="mt-auto">
-          <button className="p-3 text-gray-600 hover:text-white transition"><Settings size={24} /></button>
-        </div>
+        <div className="mt-auto"><button className="p-3 text-gray-600 hover:text-white transition"><Settings size={24} /></button></div>
       </aside>
 
       <main className="md:ml-20 p-6 md:p-10 pb-24">
@@ -539,7 +506,6 @@ export default function App() {
         {view === 'syllabus' && <Syllabus data={data} setData={setData} />}
       </main>
 
-      {/* Mobile Nav */}
       <div className="md:hidden fixed bottom-0 left-0 w-full bg-[#09090b]/90 backdrop-blur-md border-t border-white/10 p-4 flex justify-around z-40">
         <button onClick={() => setView('dashboard')} className={view === 'dashboard' ? 'text-violet-500' : 'text-gray-500'}><LayoutDashboard /></button>
         <button onClick={() => setView('zen')} className="bg-white text-black p-4 rounded-full -mt-8 shadow-lg shadow-white/20"><Play fill="black" /></button>
