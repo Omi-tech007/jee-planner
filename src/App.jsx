@@ -3,7 +3,7 @@ import {
   LayoutDashboard, BookOpen, Zap, Flame, Trophy, 
   Play, Pause, CheckCircle, X, ChevronRight, 
   Plus, Trash2, FileText, TrendingUp, LogOut,
-  Timer as TimerIcon, StopCircle
+  Timer as TimerIcon, StopCircle, RotateCcw, Target
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, 
@@ -18,12 +18,11 @@ import { doc, setDoc, getDoc } from "firebase/firestore";
 import { auth, googleProvider, db } from "./firebase"; 
 
 /**
- * JEEPLANET PRO - v11.0 (New Timer UI + Stacked Bar Charts)
+ * JEEPLANET PRO - v12.0 (Timer Modes, Misc Lectures, Physics KPP, Maths DIBY)
  */
 
 // --- CONSTANTS ---
 const SUBJECTS = ["Physics", "Maths", "Organic Chem", "Inorganic Chem", "Physical Chem"];
-// Colors for Charts: Physics (Purple), Maths (Blue), Chem (Green)
 const COLORS = ['#8b5cf6', '#3b82f6', '#10b981']; 
 
 const INITIAL_DATA = {
@@ -34,6 +33,7 @@ const INITIAL_DATA = {
     [sub]: { chapters: [], timeSpent: 0 }
   }), {}),
   mockTests: [],
+  kppList: [], // NEW: Physics KPP Storage
   history: {}, 
   xp: 0, 
   darkMode: true
@@ -82,19 +82,36 @@ const LoginScreen = () => {
   );
 };
 
-// --- 2. NEW FULL PAGE FOCUS TIMER ---
+// --- 2. ADVANCED FOCUS TIMER (Stopwatch & Timer) ---
 const FocusTimer = ({ data, onSaveSession }) => {
-  const [timeLeft, setTimeLeft] = useState(0);
+  const [mode, setMode] = useState('stopwatch'); // 'stopwatch' or 'timer'
+  const [timeLeft, setTimeLeft] = useState(0); // For stopwatch: counts up. For timer: current seconds left
+  const [initialTimerTime, setInitialTimerTime] = useState(60); // Minutes
   const [isActive, setIsActive] = useState(false);
   const [selectedSub, setSelectedSub] = useState(SUBJECTS[0]);
 
+  // Logic for counting
   useEffect(() => {
     let interval = null;
     if (isActive) {
-      interval = setInterval(() => setTimeLeft(t => t + 1), 1000);
+      interval = setInterval(() => {
+        setTimeLeft(prev => {
+           if (mode === 'timer') {
+             if (prev <= 0) {
+                setIsActive(false);
+                alert("Timer Finished!");
+                return 0;
+             }
+             return prev - 1;
+           } else {
+             // Stopwatch
+             return prev + 1;
+           }
+        });
+      }, 1000);
     }
     return () => clearInterval(interval);
-  }, [isActive]);
+  }, [isActive, mode]);
 
   const formatTime = (s) => {
     const h = Math.floor(s / 3600);
@@ -103,17 +120,36 @@ const FocusTimer = ({ data, onSaveSession }) => {
     return `${h > 0 ? h + ':' : ''}${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
   };
 
+  const handleStart = () => {
+    if (mode === 'timer' && timeLeft === 0) {
+        setTimeLeft(initialTimerTime * 60);
+    }
+    setIsActive(true);
+  };
+
   const handleStop = () => {
     setIsActive(false);
-    if (timeLeft > 0) {
-        if(window.confirm("End session and save time?")) {
-            onSaveSession(selectedSub, timeLeft);
+    
+    // Calculate time spent
+    let timeSpentSeconds = 0;
+    if (mode === 'stopwatch') {
+        timeSpentSeconds = timeLeft;
+    } else {
+        // For timer, time spent is (Start Time - Current Time)
+        timeSpentSeconds = (initialTimerTime * 60) - timeLeft;
+    }
+
+    if (timeSpentSeconds > 60) {
+        if(window.confirm(`Save ${Math.floor(timeSpentSeconds/60)} minutes of study?`)) {
+            onSaveSession(selectedSub, timeSpentSeconds);
             setTimeLeft(0);
         }
+    } else {
+        setTimeLeft(0); // Reset if too short
     }
   };
 
-  // Calculate Daily Goal Progress
+  // Daily Goal Progress
   const today = new Date().toISOString().split('T')[0];
   const todayMins = data.history?.[today] || 0;
   const goalMins = data.dailyGoal * 60;
@@ -122,8 +158,8 @@ const FocusTimer = ({ data, onSaveSession }) => {
   return (
     <div className="h-full flex flex-col relative">
       
-      {/* Top Left: Daily Goal Pill */}
-      <div className="absolute top-0 left-0">
+      {/* Daily Goal Pill */}
+      <div className="absolute top-0 left-0 z-10">
           <div className="bg-[#18181b] border border-white/10 rounded-full py-2 px-4 flex items-center gap-3 w-64 shadow-lg">
              <div className="flex flex-col flex-1">
                 <div className="flex justify-between text-[10px] uppercase font-bold text-gray-400 mb-1">
@@ -138,41 +174,55 @@ const FocusTimer = ({ data, onSaveSession }) => {
       </div>
 
       {/* Main Timer Content */}
-      <div className="flex-1 flex flex-col items-center justify-center gap-12">
+      <div className="flex-1 flex flex-col items-center justify-center gap-8">
          
+         {/* Mode Toggle */}
+         <div className="flex bg-white/5 p-1 rounded-lg">
+             <button onClick={() => { setMode('stopwatch'); setTimeLeft(0); setIsActive(false); }} className={`px-4 py-2 rounded-md text-sm font-bold transition ${mode === 'stopwatch' ? 'bg-violet-600 text-white' : 'text-gray-400'}`}>Stopwatch</button>
+             <button onClick={() => { setMode('timer'); setTimeLeft(initialTimerTime*60); setIsActive(false); }} className={`px-4 py-2 rounded-md text-sm font-bold transition ${mode === 'timer' ? 'bg-violet-600 text-white' : 'text-gray-400'}`}>Timer</button>
+         </div>
+
          {/* Time Display */}
          <div className="text-center">
              <div className="text-[8rem] md:text-[10rem] font-bold font-mono tracking-tighter leading-none text-white tabular-nums drop-shadow-2xl">
                  {formatTime(timeLeft)}
              </div>
-             <p className="text-gray-500 mt-2 font-medium tracking-wide">FOCUS SESSION</p>
+             
+             {/* Timer Input (Only show when not active and in timer mode) */}
+             {mode === 'timer' && !isActive && (
+                 <div className="mt-4 flex items-center justify-center gap-2">
+                     <span className="text-gray-400">Set Minutes:</span>
+                     <input 
+                        type="number" 
+                        value={initialTimerTime} 
+                        onChange={(e) => {
+                            const val = parseInt(e.target.value) || 0;
+                            setInitialTimerTime(val);
+                            setTimeLeft(val * 60);
+                        }}
+                        className="bg-white/10 border border-white/10 rounded px-2 py-1 w-20 text-center text-white font-bold"
+                     />
+                 </div>
+             )}
          </div>
 
-         {/* Controls Container */}
+         {/* Controls */}
          <div className="bg-[#18181b] border border-white/10 p-2 rounded-2xl flex items-center gap-4 shadow-2xl">
-            
-            {/* Subject Selector */}
-            <div className="relative group">
-                <select 
-                  className="appearance-none bg-[#27272a] hover:bg-[#3f3f46] text-white py-3 pl-4 pr-10 rounded-xl font-bold outline-none cursor-pointer transition-colors"
-                  value={selectedSub}
-                  onChange={(e) => setSelectedSub(e.target.value)}
-                  disabled={isActive}
-                >
-                  {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                    <ChevronRight size={16} className="rotate-90" />
-                </div>
-            </div>
+            <select 
+              className="appearance-none bg-[#27272a] hover:bg-[#3f3f46] text-white py-3 pl-4 pr-8 rounded-xl font-bold outline-none cursor-pointer transition-colors"
+              value={selectedSub}
+              onChange={(e) => setSelectedSub(e.target.value)}
+              disabled={isActive}
+            >
+              {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
 
-            {/* Main Action Button */}
             {!isActive ? (
                 <button 
-                  onClick={() => setIsActive(true)}
+                  onClick={handleStart}
                   className="px-8 py-3 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl flex items-center gap-2 transition-transform active:scale-95"
                 >
-                  <Play size={20} fill="currentColor" /> Start
+                  <Play size={20} fill="currentColor" /> {timeLeft > 0 && mode === 'timer' && timeLeft < initialTimerTime*60 ? "Resume" : "Start"}
                 </button>
             ) : (
                 <button 
@@ -183,14 +233,10 @@ const FocusTimer = ({ data, onSaveSession }) => {
                 </button>
             )}
 
-            {/* Stop Button */}
             {(timeLeft > 0 || isActive) && (
-                 <button 
-                 onClick={handleStop}
-                 className="p-3 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-xl transition-colors border border-red-500/20"
-               >
-                 <StopCircle size={20} />
-               </button>
+                 <button onClick={handleStop} className="p-3 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-xl transition-colors border border-red-500/20">
+                   <StopCircle size={20} />
+                 </button>
             )}
          </div>
       </div>
@@ -198,8 +244,357 @@ const FocusTimer = ({ data, onSaveSession }) => {
   );
 };
 
-// --- 3. MOCK TEST TRACKER (Stacked Bar Chart) ---
+// --- 3. PHYSICS KPP SYSTEM (New Component) ---
+const PhysicsKPP = ({ data, setData }) => {
+    const [newKPP, setNewKPP] = useState({ name: '', chapter: '', attempted: false, corrected: false, myScore: 0, totalScore: 0 });
+    
+    // Filter only Physics chapters for the dropdown
+    const physicsChapters = data.subjects['Physics']?.chapters || [];
+
+    const addKPP = () => {
+        if (!newKPP.name || !newKPP.chapter) { alert("Name and Chapter required"); return; }
+        const entry = { id: Date.now(), ...newKPP };
+        setData(prev => ({ ...prev, kppList: [...(prev.kppList || []), entry] }));
+        setNewKPP({ name: '', chapter: '', attempted: false, corrected: false, myScore: 0, totalScore: 0 });
+    };
+
+    const deleteKPP = (id) => {
+        if(window.confirm("Delete KPP?")) setData(prev => ({ ...prev, kppList: prev.kppList.filter(k => k.id !== id) }));
+    };
+
+    const updateKPP = (id, field, value) => {
+        setData(prev => ({
+            ...prev,
+            kppList: prev.kppList.map(k => k.id === id ? { ...k, [field]: value } : k)
+        }));
+    };
+
+    // Prepare Graph Data (Last 7 KPPs)
+    const graphData = (data.kppList || [])
+        .slice(-7)
+        .map(k => ({
+            name: k.name,
+            percentage: k.totalScore > 0 ? Math.round((k.myScore / k.totalScore) * 100) : 0
+        }));
+
+    return (
+        <div className="space-y-6 max-w-5xl mx-auto">
+            <h1 className="text-3xl font-bold text-white mb-2">Physics KPP Tracker</h1>
+            
+            {/* INPUT FORM */}
+            <GlassCard className="border-t-4 border-t-purple-500">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <input type="text" placeholder="KPP Name (e.g. Rotational-01)" className="bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none" value={newKPP.name} onChange={e => setNewKPP({...newKPP, name: e.target.value})} />
+                    <select className="bg-[#18181b] border border-white/10 rounded-lg p-3 text-white outline-none" value={newKPP.chapter} onChange={e => setNewKPP({...newKPP, chapter: e.target.value})}>
+                        <option value="">Select Physics Chapter</option>
+                        {physicsChapters.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                    </select>
+                </div>
+                <div className="flex flex-wrap gap-4 items-center">
+                     <div className="flex items-center gap-2 text-gray-400">
+                         <input type="checkbox" className="w-5 h-5 accent-purple-500" checked={newKPP.attempted} onChange={e => setNewKPP({...newKPP, attempted: e.target.checked})} /> Attempted
+                     </div>
+                     <div className="flex items-center gap-2 text-gray-400">
+                         <input type="checkbox" className="w-5 h-5 accent-green-500" checked={newKPP.corrected} onChange={e => setNewKPP({...newKPP, corrected: e.target.checked})} /> Corrected
+                     </div>
+                     <div className="flex items-center gap-2">
+                         <input type="number" placeholder="My Score" className="w-24 bg-white/5 border border-white/10 rounded-lg p-2 text-white" value={newKPP.myScore} onChange={e => setNewKPP({...newKPP, myScore: parseFloat(e.target.value)})} />
+                         <span className="text-gray-500">/</span>
+                         <input type="number" placeholder="Total" className="w-24 bg-white/5 border border-white/10 rounded-lg p-2 text-white" value={newKPP.totalScore} onChange={e => setNewKPP({...newKPP, totalScore: parseFloat(e.target.value)})} />
+                     </div>
+                     <button onClick={addKPP} className="ml-auto px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold">Add KPP</button>
+                </div>
+            </GlassCard>
+
+            {/* GRAPH */}
+            {graphData.length > 0 && (
+                <GlassCard className="h-[300px]">
+                    <h3 className="text-white font-bold mb-4 flex items-center gap-2"><TrendingUp size={18}/> Performance (Last 7)</h3>
+                    <ResponsiveContainer width="100%" height="90%">
+                        <BarChart data={graphData}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                            <XAxis dataKey="name" stroke="#9ca3af" fontSize={10} tickLine={false} axisLine={false} />
+                            <YAxis stroke="#9ca3af" fontSize={10} tickLine={false} axisLine={false} />
+                            <RechartsTooltip cursor={{fill: 'rgba(255,255,255,0.05)'}} contentStyle={{backgroundColor: '#18181b', borderColor: '#27272a', color: '#fff'}} />
+                            <Bar dataKey="percentage" fill="#8b5cf6" radius={[4,4,0,0]} name="Score %" />
+                        </BarChart>
+                    </ResponsiveContainer>
+                </GlassCard>
+            )}
+
+            {/* LIST */}
+            <div className="grid gap-3">
+                {(data.kppList || []).slice().reverse().map(kpp => (
+                    <div key={kpp.id} className="bg-[#121212] border border-white/10 p-4 rounded-xl flex flex-col md:flex-row items-center justify-between gap-4">
+                        <div className="flex-1">
+                            <div className="flex items-center gap-3">
+                                <span className="font-bold text-white text-lg">{kpp.name}</span>
+                                <span className="text-xs text-gray-500 px-2 py-1 bg-white/5 rounded">{kpp.chapter}</span>
+                            </div>
+                            <div className="flex gap-4 mt-2 text-sm">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" checked={kpp.attempted} onChange={(e) => updateKPP(kpp.id, 'attempted', e.target.checked)} className="accent-purple-500"/> <span className={kpp.attempted ? "text-purple-400" : "text-gray-500"}>Attempted</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" checked={kpp.corrected} onChange={(e) => updateKPP(kpp.id, 'corrected', e.target.checked)} className="accent-green-500"/> <span className={kpp.corrected ? "text-green-400" : "text-gray-500"}>Corrected</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <div className="text-right">
+                                <div className="text-white font-bold text-xl">{kpp.myScore} <span className="text-gray-500 text-sm">/ {kpp.totalScore}</span></div>
+                                <div className="text-xs text-gray-500">{kpp.totalScore > 0 ? Math.round((kpp.myScore/kpp.totalScore)*100) : 0}%</div>
+                            </div>
+                            <button onClick={() => deleteKPP(kpp.id)} className="text-gray-600 hover:text-red-500"><Trash2 size={18} /></button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+// --- 4. SYLLABUS COMPONENT (Updated with Misc Lectures & DIBY) ---
+const Syllabus = ({ data, setData }) => {
+  const [selectedSubject, setSelectedSubject] = useState(SUBJECTS[0]);
+  const [gradeView, setGradeView] = useState('11');
+
+  const addChapter = () => {
+    const name = prompt(`Enter Class ${gradeView} Chapter Name:`);
+    const lectures = prompt("Total Main Lectures:");
+    if (name && lectures) {
+      const newChapter = { 
+          id: Date.now().toString(), 
+          name, 
+          totalLectures: parseInt(lectures), 
+          lectures: new Array(parseInt(lectures)).fill(false), 
+          grade: gradeView,
+          miscLectures: [], // NEW
+          diby: { solved: 0, total: 0 } // NEW
+      };
+      const newData = { ...data };
+      newData.subjects[selectedSubject].chapters.push(newChapter);
+      setData(newData);
+    }
+  };
+
+  const updateChapter = (updated) => {
+    const newData = { ...data };
+    const idx = newData.subjects[selectedSubject].chapters.findIndex(c => c.id === updated.id);
+    newData.subjects[selectedSubject].chapters[idx] = updated;
+    setData(newData);
+  };
+
+  const deleteChapter = (id) => {
+    const newData = { ...data };
+    newData.subjects[selectedSubject].chapters = newData.subjects[selectedSubject].chapters.filter(c => c.id !== id);
+    setData(newData);
+  };
+
+  const filteredChapters = data.subjects[selectedSubject].chapters.filter(c => c.grade === gradeView || (!c.grade && gradeView === '11'));
+
+  return (
+    <div className="space-y-6 max-w-5xl mx-auto">
+      <div className="flex justify-between items-center">
+        <h1 className="text-3xl font-bold text-white">Syllabus Tracker</h1>
+        <button onClick={addChapter} className="px-6 py-3 bg-violet-600 text-white rounded-xl font-bold flex items-center gap-2"><Plus size={18} /> Add Chapter</button>
+      </div>
+      <div className="flex gap-4 p-1 bg-white/5 w-fit rounded-xl">
+        {['11', '12'].map(g => <button key={g} onClick={() => setGradeView(g)} className={`px-6 py-2 rounded-lg text-sm font-bold transition ${gradeView === g ? 'bg-violet-600 text-white' : 'text-gray-400'}`}>Class {g}th</button>)}
+      </div>
+      <div className="flex gap-2 overflow-x-auto pb-2">{SUBJECTS.map(s => <button key={s} onClick={() => setSelectedSubject(s)} className={`px-6 py-3 rounded-xl font-bold transition ${selectedSubject === s ? 'bg-white text-black' : 'bg-[#121212] border border-white/10 text-gray-400'}`}>{s}</button>)}</div>
+      <div className="grid gap-4">{filteredChapters.map(chapter => <ChapterItem key={chapter.id} subjectName={selectedSubject} chapter={chapter} onUpdate={updateChapter} onDelete={deleteChapter} />)}</div>
+    </div>
+  );
+};
+
+const ChapterItem = ({ subjectName, chapter, onUpdate, onDelete }) => {
+  const [expanded, setExpanded] = useState(false);
+  
+  // Stats
+  const completed = chapter.lectures.filter(l => l).length;
+  const progress = chapter.totalLectures > 0 ? Math.round((completed/chapter.totalLectures)*100) : 0;
+
+  // Handlers
+  const toggleLec = (i) => { const newLecs = [...chapter.lectures]; newLecs[i] = !newLecs[i]; onUpdate({ ...chapter, lectures: newLecs }); };
+  
+  // Misc Lecture Handlers
+  const addMisc = () => {
+      const name = prompt("Misc Lecture Name (e.g. PYQ Session):");
+      const count = prompt("Number of videos/parts:");
+      if(name && count) {
+          const newMisc = { id: Date.now(), name, total: parseInt(count), checked: new Array(parseInt(count)).fill(false) };
+          onUpdate({ ...chapter, miscLectures: [...(chapter.miscLectures || []), newMisc] });
+      }
+  };
+
+  const toggleMisc = (miscId, index) => {
+      const updatedMisc = chapter.miscLectures.map(m => {
+          if(m.id === miscId) {
+              const newChecked = [...m.checked];
+              newChecked[index] = !newChecked[index];
+              return { ...m, checked: newChecked };
+          }
+          return m;
+      });
+      onUpdate({ ...chapter, miscLectures: updatedMisc });
+  };
+
+  const deleteMisc = (miscId) => {
+      onUpdate({ ...chapter, miscLectures: chapter.miscLectures.filter(m => m.id !== miscId) });
+  };
+
+  // DIBY Handler
+  const updateDiby = (field, val) => {
+      onUpdate({ ...chapter, diby: { ...(chapter.diby || {solved:0, total:0}), [field]: parseInt(val) || 0 } });
+  };
+
+  return (
+    <GlassCard>
+      <div className="flex items-center justify-between cursor-pointer" onClick={() => setExpanded(!expanded)}>
+        <div className="flex items-center gap-4">
+          <div className={`p-3 rounded-full ${progress===100 ? 'bg-green-500/20 text-green-500' : 'bg-violet-500/20 text-violet-500'}`}>{progress===100 ? <CheckCircle size={24} /> : <BookOpen size={24} />}</div>
+          <div><h3 className="text-xl font-bold text-white">{chapter.name}</h3><p className="text-sm text-gray-400">{completed}/{chapter.totalLectures} Main Lecs • {progress}%</p></div>
+        </div>
+        <div className="flex gap-2"><button onClick={(e) => {e.stopPropagation(); onDelete(chapter.id);}} className="text-gray-600 hover:text-red-500"><Trash2 size={18}/></button><ChevronRight className={`transition ${expanded?'rotate-90':''}`} /></div>
+      </div>
+      
+      {expanded && (
+          <div className="mt-6 space-y-6">
+              {/* MAIN LECTURES */}
+              <div>
+                  <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">Main Lectures</h4>
+                  <div className="grid grid-cols-6 md:grid-cols-10 gap-2">
+                      {chapter.lectures.map((done, i) => <button key={i} onClick={() => toggleLec(i)} className={`p-2 rounded text-xs font-bold border transition ${done ? 'bg-violet-600 border-violet-600 text-white' : 'border-white/10 text-gray-500'}`}>{i+1}</button>)}
+                  </div>
+              </div>
+
+              {/* MATHS ONLY: DIBY QUESTIONS */}
+              {subjectName === 'Maths' && (
+                  <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-xl">
+                      <h4 className="text-xs font-bold text-blue-400 uppercase mb-3 flex items-center gap-2"><Target size={14}/> DIBY Questions (Do It By Yourself)</h4>
+                      <div className="flex items-center gap-4">
+                          <div className="flex items-center gap-2">
+                              <span className="text-sm text-gray-400">Solved:</span>
+                              <input type="number" className="w-16 bg-black/30 border border-white/10 rounded px-2 py-1 text-white text-sm" value={chapter.diby?.solved || 0} onChange={e => updateDiby('solved', e.target.value)} />
+                          </div>
+                          <span className="text-gray-500">/</span>
+                          <div className="flex items-center gap-2">
+                              <span className="text-sm text-gray-400">Total:</span>
+                              <input type="number" className="w-16 bg-black/30 border border-white/10 rounded px-2 py-1 text-white text-sm" value={chapter.diby?.total || 0} onChange={e => updateDiby('total', e.target.value)} />
+                          </div>
+                          <div className="ml-auto text-blue-400 font-bold">
+                              {(chapter.diby?.total > 0 ? Math.round((chapter.diby.solved / chapter.diby.total) * 100) : 0)}% Done
+                          </div>
+                      </div>
+                  </div>
+              )}
+
+              {/* MISC LECTURES */}
+              <div className="border-t border-white/10 pt-4">
+                  <div className="flex justify-between items-center mb-3">
+                      <h4 className="text-xs font-bold text-gray-500 uppercase">Misc Topics (Extra)</h4>
+                      <button onClick={addMisc} className="text-xs bg-white/10 px-2 py-1 rounded hover:bg-white/20">+ Add Topic</button>
+                  </div>
+                  {(chapter.miscLectures || []).map(misc => (
+                      <div key={misc.id} className="mb-3">
+                          <div className="flex justify-between items-center mb-1">
+                             <span className="text-sm text-gray-300">{misc.name}</span>
+                             <button onClick={() => deleteMisc(misc.id)} className="text-red-500 hover:text-red-400"><X size={12}/></button>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                              {misc.checked.map((done, i) => (
+                                  <button key={i} onClick={() => toggleMisc(misc.id, i)} className={`w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold border transition ${done ? 'bg-gray-600 border-gray-600 text-white' : 'border-white/10 text-gray-600'}`}>
+                                      {i+1}
+                                  </button>
+                              ))}
+                          </div>
+                      </div>
+                  ))}
+              </div>
+          </div>
+      )}
+    </GlassCard>
+  );
+};
+
+// --- 5. DASHBOARD ---
+const Dashboard = ({ data, setData, goToTimer, user }) => {
+  const today = new Date().toISOString().split('T')[0];
+  const todayMins = data.history?.[today] || 0;
+  const xp = data.xp || 0;
+  const level = Math.floor(xp / 1000);
+
+  const getSubjectDistribution = () => {
+    const pTime = data.subjects["Physics"]?.timeSpent || 0;
+    const mTime = data.subjects["Maths"]?.timeSpent || 0;
+    const cTime = (data.subjects["Organic Chem"]?.timeSpent || 0) + (data.subjects["Inorganic Chem"]?.timeSpent || 0) + (data.subjects["Physical Chem"]?.timeSpent || 0);
+    if (pTime + cTime + mTime === 0) return [{name: 'No Data', value: 1}];
+    return [{ name: 'Physics', value: pTime }, { name: 'Maths', value: mTime }, { name: 'Chemistry', value: cTime }];
+  };
+
+  const addTask = () => { const t = prompt("Task?"); if(t) setData(prev => ({ ...prev, tasks: [{ id: Date.now(), text: t, completed: false }, ...prev.tasks] })); };
+  const toggleTask = (id) => setData(prev => ({ ...prev, tasks: prev.tasks.map(t => t.id === id ? { ...t, completed: !t.completed } : t) }));
+  const removeTask = (id) => setData(prev => ({ ...prev, tasks: prev.tasks.filter(t => t.id !== id) }));
+  const pieData = getSubjectDistribution();
+
+  return (
+    <div className="space-y-6 max-w-7xl mx-auto">
+      <div className="bg-[#121212] border border-white/10 p-8 rounded-2xl flex justify-between items-center">
+        <div>
+           <h1 className="text-3xl font-bold text-white mb-2">Hello, {user?.displayName?.split(' ')[0]}! 👋</h1>
+           <p className="text-gray-400">Level {level} • {xp.toLocaleString()} XP</p>
+        </div>
+        <button onClick={goToTimer} className="px-8 py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-lg font-bold flex items-center gap-2">
+            <Play size={18} fill="currentColor" /> Start Session
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* DONUT CHART */}
+        <GlassCard className="min-h-[350px] flex flex-col items-center justify-center">
+          <h3 className="text-lg font-bold text-white mb-4 self-start">Subject Balance</h3>
+          <div className="relative w-full h-[250px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={pieData} cx="50%" cy="50%" innerRadius={70} outerRadius={90} paddingAngle={2} dataKey="value">
+                  {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.name === 'No Data' ? '#333' : COLORS[index % COLORS.length]} stroke="none" />)}
+                </Pie>
+                <RechartsTooltip contentStyle={{backgroundColor: '#18181b', borderRadius: '8px', border:'none'}} formatter={(val) => `${Math.round(val/60)}m`} />
+                <Legend verticalAlign="bottom" height={36} iconType="circle"/>
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pb-8">
+               <span className="text-gray-500 text-xs font-bold uppercase">Total</span>
+               <span className="text-white text-2xl font-bold">{Math.round(todayMins/60)}h</span>
+            </div>
+          </div>
+        </GlassCard>
+
+        {/* TASKS */}
+        <GlassCard>
+           <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-white">Tasks</h3><button onClick={addTask} className="text-xs px-3 py-1 bg-white/10 text-white rounded hover:bg-white/20">+ Add</button></div>
+           <div className="space-y-3 max-h-[250px] overflow-y-auto pr-2">
+             {data.tasks.map(task => (
+               <div key={task.id} className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5 hover:border-violet-500/50 transition cursor-pointer">
+                 <div onClick={() => toggleTask(task.id)} className="flex items-center gap-3">
+                   <div className={`w-5 h-5 rounded-full border-2 ${task.completed ? 'bg-violet-500 border-violet-500' : 'border-gray-600'}`}>{task.completed && <CheckCircle size={12} className="text-white mx-auto mt-0.5" />}</div>
+                   <span className={task.completed ? 'text-gray-500 line-through text-sm' : 'text-gray-200 text-sm'}>{task.text}</span>
+                 </div>
+                 <button onClick={() => removeTask(task.id)} className="text-gray-600 hover:text-red-500"><X size={14}/></button>
+               </div>
+             ))}
+             {data.tasks.length === 0 && <div className="text-center text-gray-600 py-8">No tasks today.</div>}
+           </div>
+        </GlassCard>
+      </div>
+    </div>
+  );
+};
+
+// --- 6. MOCK TEST TRACKER ---
 const MockTestTracker = ({ data, setData }) => {
+    // (Kept simple for brevity - same as previous version)
   const [isAdding, setIsAdding] = useState(false);
   const [filterType, setFilterType] = useState('All'); 
   const [testType, setTestType] = useState('Mains');
@@ -290,144 +685,6 @@ const MockTestTracker = ({ data, setData }) => {
   );
 };
 
-// --- 4. SYLLABUS COMPONENT ---
-const Syllabus = ({ data, setData }) => {
-  const [selectedSubject, setSelectedSubject] = useState(SUBJECTS[0]);
-  const [gradeView, setGradeView] = useState('11');
-
-  const addChapter = () => {
-    const name = prompt(`Enter Class ${gradeView} Chapter Name:`);
-    const lectures = prompt("Total Main Lectures:");
-    if (name && lectures) {
-      const newChapter = { id: Date.now().toString(), name, totalLectures: parseInt(lectures), lectures: new Array(parseInt(lectures)).fill(false), grade: gradeView };
-      const newData = { ...data };
-      newData.subjects[selectedSubject].chapters.push(newChapter);
-      setData(newData);
-    }
-  };
-
-  const updateChapter = (updated) => {
-    const newData = { ...data };
-    const idx = newData.subjects[selectedSubject].chapters.findIndex(c => c.id === updated.id);
-    newData.subjects[selectedSubject].chapters[idx] = updated;
-    setData(newData);
-  };
-
-  const deleteChapter = (id) => {
-    const newData = { ...data };
-    newData.subjects[selectedSubject].chapters = newData.subjects[selectedSubject].chapters.filter(c => c.id !== id);
-    setData(newData);
-  };
-
-  const filteredChapters = data.subjects[selectedSubject].chapters.filter(c => c.grade === gradeView || (!c.grade && gradeView === '11'));
-
-  return (
-    <div className="space-y-6 max-w-5xl mx-auto">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-white">Syllabus Tracker</h1>
-        <button onClick={addChapter} className="px-6 py-3 bg-violet-600 text-white rounded-xl font-bold flex items-center gap-2"><Plus size={18} /> Add Chapter</button>
-      </div>
-      <div className="flex gap-2 overflow-x-auto pb-2">{SUBJECTS.map(s => <button key={s} onClick={() => setSelectedSubject(s)} className={`px-6 py-3 rounded-xl font-bold transition ${selectedSubject === s ? 'bg-white text-black' : 'bg-[#121212] border border-white/10 text-gray-400'}`}>{s}</button>)}</div>
-      <div className="grid gap-4">{filteredChapters.map(chapter => <ChapterItem key={chapter.id} chapter={chapter} onUpdate={updateChapter} onDelete={deleteChapter} />)}</div>
-    </div>
-  );
-};
-
-const ChapterItem = ({ chapter, onUpdate, onDelete }) => {
-  const [expanded, setExpanded] = useState(false);
-  const completed = chapter.lectures.filter(l => l).length;
-  const progress = chapter.totalLectures > 0 ? Math.round((completed/chapter.totalLectures)*100) : 0;
-  const toggleLec = (i) => { const newLecs = [...chapter.lectures]; newLecs[i] = !newLecs[i]; onUpdate({ ...chapter, lectures: newLecs }); };
-
-  return (
-    <GlassCard>
-      <div className="flex items-center justify-between cursor-pointer" onClick={() => setExpanded(!expanded)}>
-        <div className="flex items-center gap-4">
-          <div className={`p-3 rounded-full ${progress===100 ? 'bg-green-500/20 text-green-500' : 'bg-violet-500/20 text-violet-500'}`}>{progress===100 ? <CheckCircle size={24} /> : <BookOpen size={24} />}</div>
-          <div><h3 className="text-xl font-bold text-white">{chapter.name}</h3><p className="text-sm text-gray-400">{completed}/{chapter.totalLectures} • {progress}%</p></div>
-        </div>
-        <div className="flex gap-2"><button onClick={(e) => {e.stopPropagation(); onDelete(chapter.id);}} className="text-gray-600 hover:text-red-500"><Trash2 size={18}/></button><ChevronRight className={`transition ${expanded?'rotate-90':''}`} /></div>
-      </div>
-      {expanded && <div className="mt-6 grid grid-cols-8 gap-2">{chapter.lectures.map((done, i) => <button key={i} onClick={() => toggleLec(i)} className={`p-2 rounded text-sm font-bold border ${done ? 'bg-violet-600 border-violet-600 text-white' : 'border-white/10 text-gray-500'}`}>{i+1}</button>)}</div>}
-    </GlassCard>
-  );
-};
-
-// --- 5. DASHBOARD ---
-const Dashboard = ({ data, setData, goToTimer, user }) => {
-  const today = new Date().toISOString().split('T')[0];
-  const todayMins = data.history?.[today] || 0;
-  const xp = data.xp || 0;
-  const level = Math.floor(xp / 1000);
-
-  const getSubjectDistribution = () => {
-    const pTime = data.subjects["Physics"]?.timeSpent || 0;
-    const mTime = data.subjects["Maths"]?.timeSpent || 0;
-    const cTime = (data.subjects["Organic Chem"]?.timeSpent || 0) + (data.subjects["Inorganic Chem"]?.timeSpent || 0) + (data.subjects["Physical Chem"]?.timeSpent || 0);
-    if (pTime + cTime + mTime === 0) return [{name: 'No Data', value: 1}];
-    return [{ name: 'Physics', value: pTime }, { name: 'Maths', value: mTime }, { name: 'Chemistry', value: cTime }];
-  };
-
-  const addTask = () => { const t = prompt("Task?"); if(t) setData(prev => ({ ...prev, tasks: [{ id: Date.now(), text: t, completed: false }, ...prev.tasks] })); };
-  const toggleTask = (id) => setData(prev => ({ ...prev, tasks: prev.tasks.map(t => t.id === id ? { ...t, completed: !t.completed } : t) }));
-  const removeTask = (id) => setData(prev => ({ ...prev, tasks: prev.tasks.filter(t => t.id !== id) }));
-  const pieData = getSubjectDistribution();
-
-  return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      <div className="bg-[#121212] border border-white/10 p-8 rounded-2xl flex justify-between items-center">
-        <div>
-           <h1 className="text-3xl font-bold text-white mb-2">Hello, {user?.displayName?.split(' ')[0]}! 👋</h1>
-           <p className="text-gray-400">Level {level} • {xp.toLocaleString()} XP</p>
-        </div>
-        <button onClick={goToTimer} className="px-8 py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-lg font-bold flex items-center gap-2">
-            <Play size={18} fill="currentColor" /> Start Session
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* DONUT CHART */}
-        <GlassCard className="min-h-[350px] flex flex-col items-center justify-center">
-          <h3 className="text-lg font-bold text-white mb-4 self-start">Subject Balance</h3>
-          <div className="relative w-full h-[250px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={pieData} cx="50%" cy="50%" innerRadius={70} outerRadius={90} paddingAngle={2} dataKey="value">
-                  {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.name === 'No Data' ? '#333' : COLORS[index % COLORS.length]} stroke="none" />)}
-                </Pie>
-                <RechartsTooltip contentStyle={{backgroundColor: '#18181b', borderRadius: '8px', border:'none'}} formatter={(val) => `${Math.round(val/60)}m`} />
-                <Legend verticalAlign="bottom" height={36} iconType="circle"/>
-              </PieChart>
-            </ResponsiveContainer>
-            {/* Center Text */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pb-8">
-               <span className="text-gray-500 text-xs font-bold uppercase">Total</span>
-               <span className="text-white text-2xl font-bold">{Math.round(todayMins/60)}h</span>
-            </div>
-          </div>
-        </GlassCard>
-
-        {/* TASKS */}
-        <GlassCard>
-           <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-white">Tasks</h3><button onClick={addTask} className="text-xs px-3 py-1 bg-white/10 text-white rounded hover:bg-white/20">+ Add</button></div>
-           <div className="space-y-3 max-h-[250px] overflow-y-auto pr-2">
-             {data.tasks.map(task => (
-               <div key={task.id} className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5 hover:border-violet-500/50 transition cursor-pointer">
-                 <div onClick={() => toggleTask(task.id)} className="flex items-center gap-3">
-                   <div className={`w-5 h-5 rounded-full border-2 ${task.completed ? 'bg-violet-500 border-violet-500' : 'border-gray-600'}`}>{task.completed && <CheckCircle size={12} className="text-white mx-auto mt-0.5" />}</div>
-                   <span className={task.completed ? 'text-gray-500 line-through text-sm' : 'text-gray-200 text-sm'}>{task.text}</span>
-                 </div>
-                 <button onClick={() => removeTask(task.id)} className="text-gray-600 hover:text-red-500"><X size={14}/></button>
-               </div>
-             ))}
-             {data.tasks.length === 0 && <div className="text-center text-gray-600 py-8">No tasks today.</div>}
-           </div>
-        </GlassCard>
-      </div>
-    </div>
-  );
-};
-
 // --- MAIN APP SHELL ---
 export default function App() {
   const [user, setUser] = useState(null);
@@ -483,9 +740,10 @@ export default function App() {
         <nav className="flex flex-col gap-8 w-full">
           {[
             { id: 'dashboard', icon: LayoutDashboard, label: 'Dash' },
-            { id: 'timer', icon: TimerIcon, label: 'Timer' }, // NEW TAB
+            { id: 'timer', icon: TimerIcon, label: 'Timer' }, 
             { id: 'syllabus', icon: BookOpen, label: 'Syllabus' },
             { id: 'mocks', icon: FileText, label: 'Mocks' },
+            { id: 'kpp', icon: Target, label: 'Phy KPP' }, // NEW KPP TAB
           ].map(item => (
             <button key={item.id} onClick={() => setView(item.id)} className={`relative group w-full flex justify-center py-3 border-l-2 transition-all duration-300 ${view === item.id ? 'border-violet-500 text-white' : 'border-transparent text-gray-600 hover:text-violet-400'}`}>
               <item.icon size={24} />
@@ -502,6 +760,7 @@ export default function App() {
         {view === 'timer' && <FocusTimer data={data} onSaveSession={saveSession} />} 
         {view === 'syllabus' && <Syllabus data={data} setData={setData} />}
         {view === 'mocks' && <MockTestTracker data={data} setData={setData} />}
+        {view === 'kpp' && <PhysicsKPP data={data} setData={setData} />} 
       </main>
 
       {/* MOBILE BOTTOM NAV */}
@@ -509,7 +768,7 @@ export default function App() {
         <button onClick={() => setView('dashboard')} className={view === 'dashboard' ? 'text-violet-500' : 'text-gray-500'}><LayoutDashboard /></button>
         <button onClick={() => setView('timer')} className={view === 'timer' ? 'text-violet-500' : 'text-gray-500'}><TimerIcon /></button>
         <button onClick={() => setView('syllabus')} className={view === 'syllabus' ? 'text-violet-500' : 'text-gray-500'}><BookOpen /></button>
-        <button onClick={() => setView('mocks')} className={view === 'mocks' ? 'text-violet-500' : 'text-gray-500'}><FileText /></button>
+        <button onClick={() => setView('kpp')} className={view === 'kpp' ? 'text-violet-500' : 'text-gray-500'}><Target /></button>
       </div>
     </div>
   );
