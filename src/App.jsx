@@ -5,7 +5,7 @@ import {
   Plus, Trash2, FileText, TrendingUp, LogOut,
   Timer as TimerIcon, StopCircle, Target, User,
   Settings, Image as ImageIcon, ExternalLink, Maximize, Minimize,
-  PieChart as PieChartIcon, Upload, Bell
+  PieChart as PieChartIcon, Upload, Bell, Calendar, Edit3
 } from 'lucide-react';
 import { 
   BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, 
@@ -20,26 +20,39 @@ import { doc, setDoc, getDoc } from "firebase/firestore";
 import { auth, googleProvider, db } from "./firebase"; 
 
 /**
- * JEEPLANET PRO - v21.0 (Upcoming Test Notifications)
+ * JEEPLANET PRO - v22.0 (Exam Selection, Heatmap, Countdown)
  */
 
-// --- CONSTANTS ---
-const SUBJECTS = ["Physics", "Maths", "Organic Chem", "Inorganic Chem", "Physical Chem"];
-const COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ec4899']; 
+// --- CONSTANTS & CONFIG ---
+const SUBJECTS = ["Physics", "Maths", "Organic Chem", "Inorganic Chem", "Physical Chem", "Biology"];
+const COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#ef4444']; 
+
+const EXAM_CONFIG = {
+  "JEE Mains (Jan) 2027": { date: "2027-01-21", marks: 300 },
+  "JEE Mains (April) 2027": { date: "2027-04-02", marks: 300 },
+  "JEE Advanced 2026": { date: "2026-05-15", marks: 0 }, // 0 = Custom
+  "JEE Advanced 2027": { date: "2027-05-15", marks: 0 },
+  "BITSAT 2027": { date: "2027-04-15", marks: 390 },
+  "NEET 2026": { date: "2026-05-05", marks: 720 },
+  "NEET 2027": { date: "2027-05-05", marks: 720 },
+  "MHT-CET (PCM) 2026": { date: "2026-04-10", marks: 200 },
+  "MHT-CET (PCB) 2026": { date: "2026-04-10", marks: 200 },
+  "MHT-CET (PCM) 2027": { date: "2027-04-10", marks: 200 },
+  "MHT-CET (PCB) 2027": { date: "2027-04-10", marks: 200 },
+};
 
 const INITIAL_DATA = {
   dailyGoal: 10,
   tasks: [],
-  subjects: SUBJECTS.reduce((acc, sub) => ({
-    ...acc,
-    [sub]: { chapters: [], timeSpent: 0 }
-  }), {}),
+  subjects: SUBJECTS.reduce((acc, sub) => ({ ...acc, [sub]: { chapters: [], timeSpent: 0 } }), {}),
   mockTests: [],
   kppList: [],
   history: {}, 
   xp: 0, 
   darkMode: true,
-  bgImage: ""
+  bgImage: "",
+  selectedExam: null, // Stores exam name
+  examDate: null      // Stores target date (customizable)
 };
 
 // --- UTILITY COMPONENTS ---
@@ -52,16 +65,72 @@ const GlassCard = ({ children, className = "", hover = false }) => (
   </motion.div>
 );
 
-// --- PROFILE DROPDOWN ---
-const ProfileDropdown = ({ user, onLogout }) => {
+// --- HEATMAP COMPONENT ---
+const StudyHeatmap = ({ history }) => {
+  // Generate last 365 days
+  const generateYearData = () => {
+    const days = [];
+    const today = new Date();
+    // Start 364 days ago
+    const start = new Date();
+    start.setDate(today.getDate() - 364);
+
+    for (let i = 0; i < 365; i++) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      const dateStr = d.toISOString().split('T')[0];
+      const mins = history[dateStr] || 0;
+      
+      // Determine intensity (0-4)
+      let intensity = 0;
+      if (mins > 0) intensity = 1;
+      if (mins > 60) intensity = 2;
+      if (mins > 180) intensity = 3;
+      if (mins > 360) intensity = 4;
+
+      days.push({ date: dateStr, intensity, month: d.getMonth() });
+    }
+    return days;
+  };
+
+  const data = generateYearData();
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  return (
+    <div className="w-full overflow-x-auto pb-2">
+      <div className="flex gap-1 min-w-[800px]">
+         {/* We display columns of weeks approximately. For simplicity in React without a library, we render a flex grid */}
+         <div className="grid grid-flow-col grid-rows-7 gap-1">
+            {data.map((day, i) => (
+              <div 
+                key={day.date} 
+                title={`${day.date}: ${Math.round((history[day.date]||0)/60)}h`}
+                className={`w-3 h-3 rounded-sm ${
+                  day.intensity === 0 ? 'bg-white/5' :
+                  day.intensity === 1 ? 'bg-emerald-900' :
+                  day.intensity === 2 ? 'bg-emerald-700' :
+                  day.intensity === 3 ? 'bg-emerald-500' :
+                  'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]'
+                }`}
+              />
+            ))}
+         </div>
+      </div>
+      <div className="flex justify-between mt-2 text-[10px] text-gray-500 font-mono px-1">
+         {months.map(m => <span key={m}>{m}</span>)}
+      </div>
+    </div>
+  );
+};
+
+// --- PROFILE DROPDOWN (Updated with Exam Change) ---
+const ProfileDropdown = ({ user, onLogout, onChangeExam }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) setIsOpen(false);
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -92,7 +161,10 @@ const ProfileDropdown = ({ user, onLogout }) => {
                <p className="text-white font-bold text-sm">{user.displayName}</p>
                <p className="text-[10px] text-gray-400 mt-0.5 truncate">{user.email}</p>
             </div>
-            <div className="p-1">
+            <div className="p-1 space-y-1">
+               <button onClick={() => { setIsOpen(false); onChangeExam(); }} className="w-full flex items-center gap-3 px-3 py-2 text-gray-300 hover:bg-white/10 rounded-lg transition-colors text-xs font-bold">
+                 <Edit3 size={14} /> Change Exam
+               </button>
                <button onClick={onLogout} className="w-full flex items-center gap-3 px-3 py-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors text-xs font-bold">
                  <LogOut size={14} /> Log Out
                </button>
@@ -104,7 +176,32 @@ const ProfileDropdown = ({ user, onLogout }) => {
   );
 };
 
-// --- 1. LOGIN SCREEN ---
+// --- EXAM SELECTION SCREEN ---
+const ExamSelectionScreen = ({ onSelect }) => {
+  return (
+    <div className="h-screen w-full bg-[#09090b] flex flex-col items-center justify-center p-6 overflow-y-auto">
+      <div className="max-w-4xl w-full text-center">
+        <h1 className="text-3xl md:text-5xl font-bold text-white mb-4">Choose Your Goal 🎯</h1>
+        <p className="text-gray-400 mb-10">We will customize your dashboard, mock tests, and countdown based on this.</p>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Object.keys(EXAM_CONFIG).map((exam) => (
+            <button
+              key={exam}
+              onClick={() => onSelect(exam)}
+              className="p-6 bg-white/5 hover:bg-violet-600/20 border border-white/10 hover:border-violet-500 rounded-2xl transition-all group text-left"
+            >
+              <h3 className="text-lg font-bold text-white group-hover:text-violet-400 transition-colors">{exam}</h3>
+              <p className="text-xs text-gray-500 mt-1">Target: {EXAM_CONFIG[exam].date}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- LOGIN SCREEN ---
 const LoginScreen = () => {
   const handleLogin = async () => {
     try { await signInWithPopup(auth, googleProvider); } catch (error) { alert("Login failed: " + error.message); }
@@ -120,189 +217,31 @@ const LoginScreen = () => {
   );
 };
 
-// --- 2. FOCUS TIMER ---
+// --- FOCUS TIMER (Unchanged but included) ---
 const FocusTimer = ({ data, setData, onSaveSession }) => {
-  const [mode, setMode] = useState('stopwatch'); 
-  const [timeLeft, setTimeLeft] = useState(0); 
-  const [initialTimerTime, setInitialTimerTime] = useState(60); 
-  const [isActive, setIsActive] = useState(false);
-  const [selectedSub, setSelectedSub] = useState(SUBJECTS[0]);
-  const [showSettings, setShowSettings] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  
-  const containerRef = useRef(null);
-  const canvasRef = useRef(null);
-  const videoRef = useRef(null);
-  const fileInputRef = useRef(null);
-
-  const handleFileUpload = (e) => {
-      const file = e.target.files[0];
-      if(file) {
-          const reader = new FileReader();
-          reader.onloadend = () => setData({...data, bgImage: reader.result});
-          reader.readAsDataURL(file);
-      }
-  };
-
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) containerRef.current.requestFullscreen().then(() => setIsFullscreen(true)).catch(err => alert("Fullscreen blocked"));
-    else document.exitFullscreen().then(() => setIsFullscreen(false));
-  };
-  useEffect(() => {
-      const handleFsChange = () => setIsFullscreen(!!document.fullscreenElement);
-      document.addEventListener("fullscreenchange", handleFsChange);
-      return () => document.removeEventListener("fullscreenchange", handleFsChange);
-  }, []);
-
-  useEffect(() => {
-      const video = videoRef.current;
-      if (!video) return;
-      const handlePause = () => setIsActive(false);
-      const handlePlay = () => setIsActive(true);
-      video.addEventListener('pause', handlePause);
-      video.addEventListener('play', handlePlay);
-      return () => {
-          video.removeEventListener('pause', handlePause);
-          video.removeEventListener('play', handlePlay);
-      };
-  }, []);
-
-  useEffect(() => {
-    let interval = null;
-    if (isActive) {
-      interval = setInterval(() => {
-        setTimeLeft(prev => {
-           let newVal = mode === 'timer' ? prev - 1 : prev + 1;
-           if (mode === 'timer' && newVal <= 0) { setIsActive(false); alert("Timer Finished!"); return 0; }
-           if (document.pictureInPictureElement && canvasRef.current) updatePiPCanvas(newVal);
-           document.title = `(${formatTime(newVal)}) JEEPlanet`;
-           return newVal;
-        });
-      }, 1000);
-    } else { document.title = "JEEPlanet Pro"; }
-    return () => clearInterval(interval);
-  }, [isActive, mode]);
-
-  const formatTime = (s) => {
-    const h = Math.floor(s / 3600);
-    const m = Math.floor((s % 3600) / 60);
-    const sec = s % 60;
-    return `${h > 0 ? h + ':' : ''}${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
-  };
-
-  const updatePiPCanvas = (time) => {
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#000000'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = '#8b5cf6'; ctx.font = 'bold 80px monospace';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(formatTime(time), canvas.width / 2, canvas.height / 2);
-  };
-
-  const togglePiP = async () => {
-    try {
-      if (document.pictureInPictureElement) await document.exitPictureInPicture();
-      else {
-        const canvas = canvasRef.current; const video = videoRef.current;
-        if (canvas && video) { updatePiPCanvas(timeLeft); const stream = canvas.captureStream(); video.srcObject = stream; await video.play(); await video.requestPictureInPicture(); }
-      }
-    } catch (err) { console.error(err); alert("Floating mode failed. Try Chrome Desktop."); }
-  };
-
+  const [mode, setMode] = useState('stopwatch'); const [timeLeft, setTimeLeft] = useState(0); const [initialTimerTime, setInitialTimerTime] = useState(60); const [isActive, setIsActive] = useState(false); const [selectedSub, setSelectedSub] = useState(SUBJECTS[0]); const [showSettings, setShowSettings] = useState(false); const [isFullscreen, setIsFullscreen] = useState(false);
+  const containerRef = useRef(null); const canvasRef = useRef(null); const videoRef = useRef(null); const fileInputRef = useRef(null);
+  const handleFileUpload = (e) => { const file = e.target.files[0]; if(file) { const reader = new FileReader(); reader.onloadend = () => setData({...data, bgImage: reader.result}); reader.readAsDataURL(file); }};
+  const toggleFullscreen = () => { if (!document.fullscreenElement) containerRef.current.requestFullscreen().then(() => setIsFullscreen(true)).catch(err => alert("Fullscreen blocked")); else document.exitFullscreen().then(() => setIsFullscreen(false)); };
+  useEffect(() => { const handleFsChange = () => setIsFullscreen(!!document.fullscreenElement); document.addEventListener("fullscreenchange", handleFsChange); return () => document.removeEventListener("fullscreenchange", handleFsChange); }, []);
+  useEffect(() => { const video = videoRef.current; if (!video) return; const handlePause = () => setIsActive(false); const handlePlay = () => setIsActive(true); video.addEventListener('pause', handlePause); video.addEventListener('play', handlePlay); return () => { video.removeEventListener('pause', handlePause); video.removeEventListener('play', handlePlay); }; }, []);
+  useEffect(() => { let interval = null; if (isActive) { interval = setInterval(() => { setTimeLeft(prev => { let newVal = mode === 'timer' ? prev - 1 : prev + 1; if (mode === 'timer' && newVal <= 0) { setIsActive(false); alert("Timer Finished!"); return 0; } if (document.pictureInPictureElement && canvasRef.current) updatePiPCanvas(newVal); document.title = `(${formatTime(newVal)}) JEEPlanet`; return newVal; }); }, 1000); } else { document.title = "JEEPlanet Pro"; } return () => clearInterval(interval); }, [isActive, mode]);
+  const formatTime = (s) => { const h = Math.floor(s / 3600); const m = Math.floor((s % 3600) / 60); const sec = s % 60; return `${h > 0 ? h + ':' : ''}${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`; };
+  const updatePiPCanvas = (time) => { const canvas = canvasRef.current; const ctx = canvas.getContext('2d'); ctx.fillStyle = '#000000'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = '#8b5cf6'; ctx.font = 'bold 80px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(formatTime(time), canvas.width / 2, canvas.height / 2); };
+  const togglePiP = async () => { try { if (document.pictureInPictureElement) await document.exitPictureInPicture(); else { const canvas = canvasRef.current; const video = videoRef.current; if (canvas && video) { updatePiPCanvas(timeLeft); const stream = canvas.captureStream(); video.srcObject = stream; await video.play(); await video.requestPictureInPicture(); } } } catch (err) { console.error(err); alert("Floating mode failed. Try Chrome Desktop."); } };
   const handleStart = () => { if (mode === 'timer' && timeLeft === 0) setTimeLeft(initialTimerTime * 60); setIsActive(true); };
-  const handleStop = () => {
-    setIsActive(false);
-    let timeSpentSeconds = mode === 'stopwatch' ? timeLeft : (initialTimerTime * 60) - timeLeft;
-    if (timeSpentSeconds > 60) {
-        if(window.confirm(`Save ${Math.floor(timeSpentSeconds/60)} minutes of study?`)) { onSaveSession(selectedSub, timeSpentSeconds); setTimeLeft(0); }
-    } else { setTimeLeft(0); }
-  };
-
-  const today = new Date().toISOString().split('T')[0];
-  const todayMins = data.history?.[today] || 0;
-  const goalMins = data.dailyGoal * 60;
-  const percent = Math.min((todayMins / goalMins) * 100, 100);
-
+  const handleStop = () => { setIsActive(false); let timeSpentSeconds = mode === 'stopwatch' ? timeLeft : (initialTimerTime * 60) - timeLeft; if (timeSpentSeconds > 60) { if(window.confirm(`Save ${Math.floor(timeSpentSeconds/60)} minutes of study?`)) { onSaveSession(selectedSub, timeSpentSeconds); setTimeLeft(0); } } else { setTimeLeft(0); } };
+  const today = new Date().toISOString().split('T')[0]; const todayMins = data.history?.[today] || 0; const goalMins = data.dailyGoal * 60; const percent = Math.min((todayMins / goalMins) * 100, 100);
   return (
-    <div 
-        ref={containerRef}
-        className="h-full flex flex-col relative overflow-hidden rounded-3xl transition-all duration-500 bg-cover bg-center"
-        style={{ backgroundImage: data.bgImage ? `linear-gradient(rgba(0,0,0,0.2), rgba(0,0,0,0.4)), url(${data.bgImage})` : 'none' }}
-    >
-      <canvas ref={canvasRef} width={400} height={200} className="hidden" />
-      <video ref={videoRef} className="hidden" muted />
-
-      <div className="absolute top-4 left-4 right-4 flex justify-between items-start z-20">
-          <div className="bg-[#18181b]/90 backdrop-blur border border-white/10 rounded-full py-2 px-4 flex items-center gap-3 w-64 shadow-lg">
-             <div className="flex flex-col flex-1">
-                <div className="flex justify-between text-[10px] uppercase font-bold text-gray-400 mb-1">
-                    <span>Daily Goal</span>
-                    <span>{Math.floor(todayMins/60)}h {Math.round(todayMins%60)}m / {data.dailyGoal}h 0m</span>
-                </div>
-                <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden"><div className="h-full bg-violet-500 transition-all duration-500" style={{width: `${percent}%`}}></div></div>
-             </div>
-          </div>
-          <div className="flex gap-2">
-             <button onClick={togglePiP} className="p-2 bg-[#18181b]/90 border border-white/10 rounded-full text-gray-400 hover:text-white transition"><ExternalLink size={18}/></button>
-             <button onClick={toggleFullscreen} className="p-2 bg-[#18181b]/90 border border-white/10 rounded-full text-gray-400 hover:text-white transition">{isFullscreen ? <Minimize size={18}/> : <Maximize size={18}/>}</button>
-             <button onClick={() => setShowSettings(!showSettings)} className="p-2 bg-[#18181b]/90 border border-white/10 rounded-full text-gray-400 hover:text-white transition"><Settings size={18}/></button>
-          </div>
-      </div>
-
-      <AnimatePresence>
-          {showSettings && (
-              <motion.div initial={{opacity:0, y:-20}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-20}} className="absolute top-20 right-4 z-30 bg-[#18181b] border border-white/10 p-4 rounded-xl shadow-2xl w-72">
-                  <h4 className="text-white font-bold mb-3 flex items-center gap-2"><ImageIcon size={16}/> Custom Background</h4>
-                  <div className="mb-3">
-                      <span className="text-[10px] text-gray-500 uppercase font-bold">Image URL</span>
-                      <input type="text" placeholder="Paste URL..." className="w-full bg-white/5 border border-white/10 rounded p-2 text-xs text-white outline-none focus:border-violet-500" value={data.bgImage?.startsWith('data') ? '' : data.bgImage} onChange={(e) => setData({...data, bgImage: e.target.value})} />
-                  </div>
-                  <div className="mb-4">
-                      <span className="text-[10px] text-gray-500 uppercase font-bold">Or Upload from Device</span>
-                      <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleFileUpload} />
-                      <button onClick={() => fileInputRef.current.click()} className="mt-1 w-full flex items-center justify-center gap-2 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs text-gray-300 font-bold transition">
-                          <Upload size={14} /> Choose File
-                      </button>
-                  </div>
-                  <div className="flex justify-end"><button onClick={() => setData({...data, bgImage: ''})} className="text-xs text-red-400 hover:text-red-300">Remove Image</button></div>
-              </motion.div>
-          )}
-      </AnimatePresence>
-
-      <div className="flex-1 flex flex-col items-center justify-center gap-8 z-10">
-         {!isActive && (
-             <div className="flex bg-white/5 backdrop-blur p-1 rounded-lg animate-in fade-in zoom-in duration-300">
-                 <button onClick={() => { setMode('stopwatch'); setTimeLeft(0); }} className={`px-4 py-2 rounded-md text-sm font-bold transition ${mode === 'stopwatch' ? 'bg-violet-600 text-white' : 'text-gray-400'}`}>Stopwatch</button>
-                 <button onClick={() => { setMode('timer'); setTimeLeft(initialTimerTime*60); }} className={`px-4 py-2 rounded-md text-sm font-bold transition ${mode === 'timer' ? 'bg-violet-600 text-white' : 'text-gray-400'}`}>Timer</button>
-             </div>
-         )}
-
-         <div className="text-center">
-             <div className="text-[8rem] md:text-[12rem] font-bold font-mono tracking-tighter leading-none text-white tabular-nums drop-shadow-2xl transition-all">{formatTime(timeLeft)}</div>
-             {mode === 'timer' && !isActive && (<div className="mt-4 flex items-center justify-center gap-2"><span className="text-gray-400">Set Minutes:</span><input type="number" value={initialTimerTime} onChange={(e) => { const val = parseInt(e.target.value) || 0; setInitialTimerTime(val); setTimeLeft(val * 60); }} className="bg-white/10 border border-white/10 rounded px-2 py-1 w-20 text-center text-white font-bold backdrop-blur" /></div>)}
-         </div>
-
-         <div className="bg-[#18181b]/90 backdrop-blur border border-white/10 p-2 rounded-2xl flex items-center gap-4 shadow-2xl transition-all duration-500">
-            {isActive ? (
-                <div className="px-6 py-3 font-bold text-violet-400 flex items-center gap-2 bg-white/5 rounded-xl border border-white/5"><div className="w-2 h-2 rounded-full bg-violet-500 animate-pulse"></div>Studying: {selectedSub}</div>
-            ) : (
-                <select className="appearance-none bg-[#27272a] hover:bg-[#3f3f46] text-white py-3 pl-4 pr-8 rounded-xl font-bold outline-none cursor-pointer transition-colors" value={selectedSub} onChange={(e) => setSelectedSub(e.target.value)}>
-                  {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-            )}
-            {!isActive ? (
-                <button onClick={handleStart} className="px-8 py-3 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl flex items-center gap-2 transition-transform active:scale-95"><Play size={20} fill="currentColor" /> {timeLeft > 0 && mode === 'timer' && timeLeft < initialTimerTime*60 ? "Resume" : "Start"}</button>
-            ) : (
-                <button onClick={() => setIsActive(false)} className="px-8 py-3 bg-yellow-600 hover:bg-yellow-700 text-white font-bold rounded-xl flex items-center gap-2 transition-transform active:scale-95"><Pause size={20} fill="currentColor" /> Pause</button>
-            )}
-            {(timeLeft > 0 || isActive) && <button onClick={handleStop} className="p-3 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-xl transition-colors border border-red-500/20"><StopCircle size={20} /></button>}
-         </div>
-      </div>
-    </div>
+    <div ref={containerRef} className="h-full flex flex-col relative overflow-hidden rounded-3xl transition-all duration-500 bg-cover bg-center" style={{ backgroundImage: data.bgImage ? `linear-gradient(rgba(0,0,0,0.2), rgba(0,0,0,0.4)), url(${data.bgImage})` : 'none' }}>
+      <canvas ref={canvasRef} width={400} height={200} className="hidden" /><video ref={videoRef} className="hidden" muted />
+      <div className="absolute top-4 left-4 right-4 flex justify-between items-start z-20"><div className="bg-[#18181b]/90 backdrop-blur border border-white/10 rounded-full py-2 px-4 flex items-center gap-3 w-64 shadow-lg"><div className="flex flex-col flex-1"><div className="flex justify-between text-[10px] uppercase font-bold text-gray-400 mb-1"><span>Daily Goal</span><span>{Math.floor(todayMins/60)}h {Math.round(todayMins%60)}m / {data.dailyGoal}h 0m</span></div><div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden"><div className="h-full bg-violet-500 transition-all duration-500" style={{width: `${percent}%`}}></div></div></div></div><div className="flex gap-2"><button onClick={togglePiP} className="p-2 bg-[#18181b]/90 border border-white/10 rounded-full text-gray-400 hover:text-white transition"><ExternalLink size={18}/></button><button onClick={toggleFullscreen} className="p-2 bg-[#18181b]/90 border border-white/10 rounded-full text-gray-400 hover:text-white transition">{isFullscreen ? <Minimize size={18}/> : <Maximize size={18}/>}</button><button onClick={() => setShowSettings(!showSettings)} className="p-2 bg-[#18181b]/90 border border-white/10 rounded-full text-gray-400 hover:text-white transition"><Settings size={18}/></button></div></div>
+      <AnimatePresence>{showSettings && (<motion.div initial={{opacity:0, y:-20}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-20}} className="absolute top-20 right-4 z-30 bg-[#18181b] border border-white/10 p-4 rounded-xl shadow-2xl w-72"><h4 className="text-white font-bold mb-3 flex items-center gap-2"><ImageIcon size={16}/> Custom Background</h4><div className="mb-3"><span className="text-[10px] text-gray-500 uppercase font-bold">Image URL</span><input type="text" placeholder="Paste URL..." className="w-full bg-white/5 border border-white/10 rounded p-2 text-xs text-white outline-none focus:border-violet-500" value={data.bgImage?.startsWith('data') ? '' : data.bgImage} onChange={(e) => setData({...data, bgImage: e.target.value})} /></div><div className="mb-4"><span className="text-[10px] text-gray-500 uppercase font-bold">Or Upload from Device</span><input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleFileUpload} /><button onClick={() => fileInputRef.current.click()} className="mt-1 w-full flex items-center justify-center gap-2 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs text-gray-300 font-bold transition"><Upload size={14} /> Choose File</button></div><div className="flex justify-end"><button onClick={() => setData({...data, bgImage: ''})} className="text-xs text-red-400 hover:text-red-300">Remove Image</button></div></motion.div>)}</AnimatePresence>
+      <div className="flex-1 flex flex-col items-center justify-center gap-8 z-10">{!isActive && (<div className="flex bg-white/5 backdrop-blur p-1 rounded-lg animate-in fade-in zoom-in duration-300"><button onClick={() => { setMode('stopwatch'); setTimeLeft(0); }} className={`px-4 py-2 rounded-md text-sm font-bold transition ${mode === 'stopwatch' ? 'bg-violet-600 text-white' : 'text-gray-400'}`}>Stopwatch</button><button onClick={() => { setMode('timer'); setTimeLeft(initialTimerTime*60); }} className={`px-4 py-2 rounded-md text-sm font-bold transition ${mode === 'timer' ? 'bg-violet-600 text-white' : 'text-gray-400'}`}>Timer</button></div>)}<div className="text-center"><div className="text-[8rem] md:text-[12rem] font-bold font-mono tracking-tighter leading-none text-white tabular-nums drop-shadow-2xl transition-all">{formatTime(timeLeft)}</div>{mode === 'timer' && !isActive && (<div className="mt-4 flex items-center justify-center gap-2"><span className="text-gray-400">Set Minutes:</span><input type="number" value={initialTimerTime} onChange={(e) => { const val = parseInt(e.target.value) || 0; setInitialTimerTime(val); setTimeLeft(val * 60); }} className="bg-white/10 border border-white/10 rounded px-2 py-1 w-20 text-center text-white font-bold backdrop-blur" /></div>)}</div><div className="bg-[#18181b]/90 backdrop-blur border border-white/10 p-2 rounded-2xl flex items-center gap-4 shadow-2xl transition-all duration-500">{isActive ? (<div className="px-6 py-3 font-bold text-violet-400 flex items-center gap-2 bg-white/5 rounded-xl border border-white/5"><div className="w-2 h-2 rounded-full bg-violet-500 animate-pulse"></div>Studying: {selectedSub}</div>) : (<select className="appearance-none bg-[#27272a] hover:bg-[#3f3f46] text-white py-3 pl-4 pr-8 rounded-xl font-bold outline-none cursor-pointer transition-colors" value={selectedSub} onChange={(e) => setSelectedSub(e.target.value)}>{SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}</select>)}{!isActive ? (<button onClick={handleStart} className="px-8 py-3 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl flex items-center gap-2 transition-transform active:scale-95"><Play size={20} fill="currentColor" /> {timeLeft > 0 && mode === 'timer' && timeLeft < initialTimerTime*60 ? "Resume" : "Start"}</button>) : (<button onClick={() => setIsActive(false)} className="px-8 py-3 bg-yellow-600 hover:bg-yellow-700 text-white font-bold rounded-xl flex items-center gap-2 transition-transform active:scale-95"><Pause size={20} fill="currentColor" /> Pause</button>)}{(timeLeft > 0 || isActive) && <button onClick={handleStop} className="p-3 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-xl transition-colors border border-red-500/20"><StopCircle size={20} /></button>}</div></div></div>
   );
 };
 
-// --- 3. PHYSICS KPP ---
+// --- 3. PHYSICS KPP (Unchanged) ---
 const PhysicsKPP = ({ data, setData }) => {
     const [newKPP, setNewKPP] = useState({ name: '', chapter: '', attempted: false, corrected: false, myScore: 0, totalScore: 0 });
     const physicsChapters = data.subjects['Physics']?.chapters || [];
@@ -313,7 +252,7 @@ const PhysicsKPP = ({ data, setData }) => {
     return (<div className="space-y-6 max-w-5xl mx-auto"><h1 className="text-3xl font-bold text-white mb-2">Physics KPP Tracker</h1><GlassCard className="border-t-4 border-t-purple-500"><div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4"><input type="text" placeholder="KPP Name (e.g. Rotational-01)" className="bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none" value={newKPP.name} onChange={e => setNewKPP({...newKPP, name: e.target.value})} /><select className="bg-[#18181b] border border-white/10 rounded-lg p-3 text-white outline-none" value={newKPP.chapter} onChange={e => setNewKPP({...newKPP, chapter: e.target.value})}><option value="">Select Physics Chapter</option>{physicsChapters.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select></div><div className="flex flex-wrap gap-4 items-center"><div className="flex items-center gap-2 text-gray-400"><input type="checkbox" className="w-5 h-5 accent-purple-500" checked={newKPP.attempted} onChange={e => setNewKPP({...newKPP, attempted: e.target.checked})} /> Attempted</div><div className="flex items-center gap-2 text-gray-400"><input type="checkbox" className="w-5 h-5 accent-green-500" checked={newKPP.corrected} onChange={e => setNewKPP({...newKPP, corrected: e.target.checked})} /> Corrected</div><div className="flex items-center gap-2"><input type="number" placeholder="My Score" className="w-24 bg-white/5 border border-white/10 rounded-lg p-2 text-white" value={newKPP.myScore} onChange={e => setNewKPP({...newKPP, myScore: parseFloat(e.target.value)})} /><span className="text-gray-500">/</span><input type="number" placeholder="Total" className="w-24 bg-white/5 border border-white/10 rounded-lg p-2 text-white" value={newKPP.totalScore} onChange={e => setNewKPP({...newKPP, totalScore: parseFloat(e.target.value)})} /></div><button onClick={addKPP} className="ml-auto px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold">Add KPP</button></div></GlassCard>{graphData.length > 0 && (<GlassCard className="h-[300px]"><ResponsiveContainer width="100%" height="90%"><BarChart data={graphData}><CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} /><XAxis dataKey="name" stroke="#9ca3af" fontSize={10} tickLine={false} axisLine={false} /><YAxis stroke="#9ca3af" fontSize={10} tickLine={false} axisLine={false} /><RechartsTooltip cursor={{fill: 'rgba(255,255,255,0.05)'}} contentStyle={{backgroundColor: '#18181b', borderColor: '#27272a', color: '#fff'}} /><Bar dataKey="percentage" fill="#8b5cf6" radius={[4,4,0,0]} name="Score %" /></BarChart></ResponsiveContainer></GlassCard>)}<div className="grid gap-3">{(data.kppList || []).slice().reverse().map(kpp => (<div key={kpp.id} className="bg-[#121212] border border-white/10 p-4 rounded-xl flex flex-col md:flex-row items-center justify-between gap-4"><div className="flex-1"><div className="flex items-center gap-3"><span className="font-bold text-white text-lg">{kpp.name}</span><span className="text-xs text-gray-500 px-2 py-1 bg-white/5 rounded">{kpp.chapter}</span></div><div className="flex gap-4 mt-2 text-sm"><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={kpp.attempted} onChange={(e) => updateKPP(kpp.id, 'attempted', e.target.checked)} className="accent-purple-500"/> <span className={kpp.attempted ? "text-purple-400" : "text-gray-500"}>Attempted</span></label><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={kpp.corrected} onChange={(e) => updateKPP(kpp.id, 'corrected', e.target.checked)} className="accent-green-500"/> <span className={kpp.corrected ? "text-green-400" : "text-gray-500"}>Corrected</span></label></div></div><div className="flex items-center gap-4"><div className="text-right"><div className="text-white font-bold text-xl">{kpp.myScore} <span className="text-gray-500 text-sm">/ {kpp.totalScore}</span></div><div className="text-xs text-gray-500">{kpp.totalScore > 0 ? Math.round((kpp.myScore/kpp.totalScore)*100) : 0}%</div></div><button onClick={() => deleteKPP(kpp.id)} className="text-gray-600 hover:text-red-500"><Trash2 size={18} /></button></div></div>))}</div></div>);
 };
 
-// --- 4. SYLLABUS & MOCKS (Updated with Notifications) ---
+// --- 4. SYLLABUS & MOCKS (Updated with Exam Prefs) ---
 const Syllabus = ({ data, setData }) => {
   const [selectedSubject, setSelectedSubject] = useState(SUBJECTS[0]);
   const [gradeView, setGradeView] = useState('11');
@@ -354,151 +293,104 @@ const ChapterItem = ({ subjectName, chapter, onUpdate, onDelete }) => {
 const MockTestTracker = ({ data, setData }) => {
   const [isAdding, setIsAdding] = useState(false);
   const [filterType, setFilterType] = useState('All'); 
-  const [testType, setTestType] = useState('Mains');
-  const [newTest, setNewTest] = useState({ name: '', date: '', p: '', c: '', m: '', maxMarks: 300, reminder: false });
+  // Default to selected exam or fallback to Mains
+  const [testType, setTestType] = useState(data.selectedExam || 'Mains');
+  const [newTest, setNewTest] = useState({ name: '', date: '', p: '', c: '', m: '', maxMarks: 0, reminder: false });
 
-  // NOTIFICATION PERMISSION REQUEST
+  // Update default max marks when adding new test
+  useEffect(() => {
+      if(isAdding && data.selectedExam) {
+          const config = EXAM_CONFIG[data.selectedExam];
+          if(config) {
+              setNewTest(prev => ({ ...prev, maxMarks: config.marks || 300 }));
+              setTestType(data.selectedExam);
+          }
+      }
+  }, [isAdding, data.selectedExam]);
+
   const requestNotificationPermission = async () => {
-      if (!("Notification" in window)) {
-          alert("This browser does not support desktop notification");
-          return;
-      }
-      if (Notification.permission !== "granted") {
-          await Notification.requestPermission();
-      }
+      if (!("Notification" in window)) { alert("This browser does not support desktop notification"); return; }
+      if (Notification.permission !== "granted") await Notification.requestPermission();
   };
 
   const addTest = () => {
     if (!newTest.name || !newTest.date) return;
-    const p = parseFloat(newTest.p) || 0;
-    const c = parseFloat(newTest.c) || 0;
-    const m = parseFloat(newTest.m) || 0;
+    const p = parseFloat(newTest.p) || 0; const c = parseFloat(newTest.c) || 0; const m = parseFloat(newTest.m) || 0;
     const total = p + c + m;
-    const max = testType === 'Mains' ? 300 : (parseInt(newTest.maxMarks) || 360);
-    const testEntry = { 
-        id: Date.now(), 
-        type: testType, 
-        name: newTest.name, 
-        date: newTest.date, 
-        p, c, m, 
-        total, 
-        maxMarks: max,
-        reminder: newTest.reminder // SAVE REMINDER PREFERENCE
-    };
-
+    // Use user entered max marks if provided, else default to 300
+    const max = parseInt(newTest.maxMarks) || 300;
+    
+    const testEntry = { id: Date.now(), type: testType, name: newTest.name, date: newTest.date, p, c, m, total, maxMarks: max, reminder: newTest.reminder };
     if(newTest.reminder) requestNotificationPermission();
-
     setData(prev => ({ ...prev, mockTests: [...(prev.mockTests || []), testEntry] }));
     setIsAdding(false);
-    setNewTest({ name: '', date: '', p: '', c: '', m: '', maxMarks: 300, reminder: false });
+    setNewTest({ name: '', date: '', p: '', c: '', m: '', maxMarks: 0, reminder: false });
   };
 
   const deleteTest = (id) => { if(window.confirm("Delete record?")) setData(prev => ({ ...prev, mockTests: prev.mockTests.filter(t => t.id !== id) })); };
-  const filteredTests = (data.mockTests || []).filter(t => { if (filterType === 'All') return true; return t.type === filterType || (!t.type && filterType === 'Mains'); });
+  // Filter logic can be improved to match dynamic exam names, simplistic for now
+  const filteredTests = (data.mockTests || []).filter(t => { if (filterType === 'All') return true; return t.type.includes(filterType) || (filterType === 'Mains' && !t.type); });
   const sortedTests = [...filteredTests].sort((a,b) => new Date(a.date) - new Date(b.date));
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
-      <div className="flex justify-between items-center gap-4"><div><h1 className="text-3xl font-bold text-white mb-2">Mock Test Analysis</h1><p className="text-gray-400">Scores by Subject (Stacked)</p></div><div className="flex gap-2">{['All', 'Mains', 'Advanced'].map(t => (<button key={t} onClick={() => setFilterType(t)} className={`px-4 py-2 rounded-lg text-sm font-bold border transition ${filterType===t ? 'bg-violet-600 text-white border-violet-600' : 'border-white/10 text-gray-400'}`}>{t}</button>))}</div><button onClick={() => setIsAdding(!isAdding)} className="px-6 py-3 bg-violet-600 text-white rounded-xl font-bold flex items-center gap-2">{isAdding ? <X size={18}/> : <Plus size={18}/>} {isAdding ? 'Cancel' : 'Log Test'}</button></div>
-      
+      <div className="flex justify-between items-center gap-4"><div><h1 className="text-3xl font-bold text-white mb-2">Mock Test Analysis</h1><p className="text-gray-400">Scores by Subject (Stacked)</p></div><div className="flex gap-2"><button onClick={() => setFilterType('All')} className={`px-4 py-2 rounded-lg text-sm font-bold border transition ${filterType==='All' ? 'bg-violet-600 text-white border-violet-600' : 'border-white/10 text-gray-400'}`}>All</button></div><button onClick={() => setIsAdding(!isAdding)} className="px-6 py-3 bg-violet-600 text-white rounded-xl font-bold flex items-center gap-2">{isAdding ? <X size={18}/> : <Plus size={18}/>} {isAdding ? 'Cancel' : 'Log Test'}</button></div>
       {isAdding && (
           <GlassCard className="border-t-4 border-t-violet-500">
-              {/* Type Selection */}
-              <div className="flex gap-4 mb-6">{['Mains', 'Advanced'].map(t => (<label key={t} className="flex items-center gap-2 cursor-pointer"><input type="radio" className="accent-violet-500" checked={testType === t} onChange={() => setTestType(t)} /><span className={testType === t ? 'text-white font-bold' : 'text-gray-400'}>JEE {t}</span></label>))}</div>
-              
-              {/* Inputs */}
+              <div className="mb-6"><label className="text-xs text-gray-400 font-bold uppercase mb-2 block">Exam Type</label><select className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none" value={testType} onChange={(e) => setTestType(e.target.value)}>{Object.keys(EXAM_CONFIG).map(e => <option key={e} value={e}>{e}</option>)}<option value="Custom">Custom</option></select></div>
               <div className="grid grid-cols-2 md:grid-cols-6 gap-4 items-end">
                   <div className="col-span-2 space-y-2"><label className="text-xs text-gray-400 font-bold uppercase">Name</label><input type="text" className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none" value={newTest.name} onChange={e => setNewTest({...newTest, name: e.target.value})} /></div>
                   <div className="space-y-2"><label className="text-xs text-gray-400 font-bold uppercase">Date</label><input type="date" className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none" value={newTest.date} onChange={e => setNewTest({...newTest, date: e.target.value})} /></div>
                   <div className="space-y-2"><label className="text-xs text-violet-400 font-bold uppercase">Physics</label><input type="number" className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none" value={newTest.p} onChange={e => setNewTest({...newTest, p: e.target.value})} /></div>
                   <div className="space-y-2"><label className="text-xs text-green-400 font-bold uppercase">Chem</label><input type="number" className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none" value={newTest.c} onChange={e => setNewTest({...newTest, c: e.target.value})} /></div>
-                  <div className="space-y-2"><label className="text-xs text-blue-400 font-bold uppercase">Maths</label><input type="number" className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none" value={newTest.m} onChange={e => setNewTest({...newTest, m: e.target.value})} /></div>
+                  <div className="space-y-2"><label className="text-xs text-blue-400 font-bold uppercase">Maths/Bio</label><input type="number" className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none" value={newTest.m} onChange={e => setNewTest({...newTest, m: e.target.value})} /></div>
               </div>
-
-              {testType === 'Advanced' && <div className="mt-4"><input type="number" placeholder="Total Max Marks (e.g. 360)" className="bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none" value={newTest.maxMarks} onChange={e => setNewTest({...newTest, maxMarks: e.target.value})} /></div>}
-              
-              {/* REMINDER TOGGLE */}
-              <div className="mt-4 flex items-center gap-2">
-                  <input type="checkbox" id="remindMe" className="accent-violet-500 w-5 h-5" checked={newTest.reminder} onChange={e => setNewTest({...newTest, reminder: e.target.checked})} />
-                  <label htmlFor="remindMe" className="text-gray-300 text-sm font-bold flex items-center gap-2"><Bell size={16} /> Remind me 1 day before & on the day</label>
-              </div>
-
+              <div className="mt-4"><label className="text-xs text-orange-400 font-bold uppercase">Total Max Marks</label><input type="number" className="bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none w-40 ml-4" value={newTest.maxMarks} onChange={e => setNewTest({...newTest, maxMarks: e.target.value})} /></div>
+              <div className="mt-4 flex items-center gap-2"><input type="checkbox" id="remindMe" className="accent-violet-500 w-5 h-5" checked={newTest.reminder} onChange={e => setNewTest({...newTest, reminder: e.target.checked})} /><label htmlFor="remindMe" className="text-gray-300 text-sm font-bold flex items-center gap-2"><Bell size={16} /> Remind me</label></div>
               <button onClick={addTest} className="mt-6 w-full py-3 font-bold rounded-lg bg-violet-600 text-white hover:bg-violet-700">Save Score & Set Reminder</button>
           </GlassCard>
       )}
-
-      {sortedTests.length > 0 ? (<GlassCard className="h-[400px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={sortedTests} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} /><XAxis dataKey="name" stroke="#9ca3af" fontSize={12} tickLine={false} axisLine={false} /><YAxis stroke="#9ca3af" fontSize={12} tickLine={false} axisLine={false} /><RechartsTooltip cursor={{fill: 'rgba(255,255,255,0.05)'}} contentStyle={{backgroundColor: '#18181b', borderColor: '#27272a', color: '#fff'}} /><Legend iconType="circle" /><Bar dataKey="p" name="Physics" stackId="a" fill="#8b5cf6" barSize={40} radius={[0,0,4,4]} /><Bar dataKey="c" name="Chemistry" stackId="a" fill="#10b981" barSize={40} /><Bar dataKey="m" name="Maths" stackId="a" fill="#3b82f6" barSize={40} radius={[4,4,0,0]} /></BarChart></ResponsiveContainer></GlassCard>) : <div className="text-center py-10 text-gray-500">No tests logged.</div>}
-      <div className="grid gap-3">{sortedTests.slice().reverse().map(test => (<div key={test.id} className="group bg-[#121212] border border-white/10 p-4 rounded-xl flex items-center justify-between hover:border-white/20 transition"><div className="flex gap-4 items-center"><div className={`w-1 h-12 rounded-full ${test.type === 'Advanced' ? 'bg-orange-500' : 'bg-violet-500'}`}></div><div><div className="flex items-center gap-3"><h3 className="font-bold text-white">{test.name}</h3><span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${test.type === 'Advanced' ? 'bg-orange-500/20 text-orange-400' : 'bg-violet-500/20 text-violet-400'}`}>{test.type || 'Mains'}</span>{test.reminder && <Bell size={12} className="text-violet-400" />}</div><div className="text-xs text-gray-500 mt-1">{test.date}</div><div className="flex gap-4 mt-2 text-sm"><span className="text-violet-400">P: {test.p}</span><span className="text-green-400">C: {test.c}</span><span className="text-blue-400">M: {test.m}</span></div></div></div><div className="flex items-center gap-6"><div className="text-right"><div className="text-2xl font-bold text-white">{test.total} <span className="text-sm text-gray-500 font-normal">/ {test.maxMarks || 300}</span></div><div className="text-xs text-gray-500 uppercase">{Math.round((test.total / (test.maxMarks || 300)) * 100)}%</div></div><button onClick={() => deleteTest(test.id)} className="p-2 text-gray-600 hover:text-red-500 transition" title="Delete Test Record"><Trash2 size={20} /></button></div></div>))}</div>
+      {sortedTests.length > 0 ? (<GlassCard className="h-[400px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={sortedTests} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} /><XAxis dataKey="name" stroke="#9ca3af" fontSize={12} tickLine={false} axisLine={false} /><YAxis stroke="#9ca3af" fontSize={12} tickLine={false} axisLine={false} /><RechartsTooltip cursor={{fill: 'rgba(255,255,255,0.05)'}} contentStyle={{backgroundColor: '#18181b', borderColor: '#27272a', color: '#fff'}} /><Legend iconType="circle" /><Bar dataKey="p" name="Physics" stackId="a" fill="#8b5cf6" barSize={40} radius={[0,0,4,4]} /><Bar dataKey="c" name="Chemistry" stackId="a" fill="#10b981" barSize={40} /><Bar dataKey="m" name="Maths/Bio" stackId="a" fill="#3b82f6" barSize={40} radius={[4,4,0,0]} /></BarChart></ResponsiveContainer></GlassCard>) : <div className="text-center py-10 text-gray-500">No tests logged.</div>}
+      <div className="grid gap-3">{sortedTests.slice().reverse().map(test => (<div key={test.id} className="group bg-[#121212] border border-white/10 p-4 rounded-xl flex items-center justify-between hover:border-white/20 transition"><div className="flex gap-4 items-center"><div className={`w-1 h-12 rounded-full bg-violet-500`}></div><div><div className="flex items-center gap-3"><h3 className="font-bold text-white">{test.name}</h3><span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-white/10 text-gray-400`}>{test.type}</span>{test.reminder && <Bell size={12} className="text-violet-400" />}</div><div className="text-xs text-gray-500 mt-1">{test.date}</div><div className="flex gap-4 mt-2 text-sm"><span className="text-violet-400">P: {test.p}</span><span className="text-green-400">C: {test.c}</span><span className="text-blue-400">M/B: {test.m}</span></div></div></div><div className="flex items-center gap-6"><div className="text-right"><div className="text-2xl font-bold text-white">{test.total} <span className="text-sm text-gray-500 font-normal">/ {test.maxMarks}</span></div><div className="text-xs text-gray-500 uppercase">{test.maxMarks > 0 ? Math.round((test.total / test.maxMarks) * 100) : 0}%</div></div><button onClick={() => deleteTest(test.id)} className="p-2 text-gray-600 hover:text-red-500 transition" title="Delete Test Record"><Trash2 size={20} /></button></div></div>))}</div>
     </div>
   );
 };
 
-// --- 5. ANALYSIS COMPONENT (Fixed Axis & Zero Filling) ---
+// --- 5. ANALYSIS COMPONENT (Updated with Heatmap) ---
 const Analysis = ({ data }) => {
     const [range, setRange] = useState('Week'); // Week, Month, Year, All
 
-    // -- Helper to Generate Fixed Timeline --
     const generateTimeline = () => {
         const history = data.history || {};
         const now = new Date();
         const timeline = [];
 
         if (range === 'Week') {
-            // Sunday to Saturday (Fixed 7 days)
-            const currentDay = now.getDay(); // 0 = Sun, 6 = Sat
+            const currentDay = now.getDay();
             const startOfWeek = new Date(now);
-            startOfWeek.setDate(now.getDate() - currentDay); // Go back to Sunday
-
+            startOfWeek.setDate(now.getDate() - currentDay);
             for (let i = 0; i < 7; i++) {
                 const d = new Date(startOfWeek);
                 d.setDate(startOfWeek.getDate() + i);
                 const dateStr = d.toISOString().split('T')[0];
-                timeline.push({
-                    name: d.toLocaleDateString('en-US', { weekday: 'short' }), // Sun, Mon...
-                    minutes: history[dateStr] || 0, // Fill 0 if no data
-                    date: dateStr // Keep for reference
-                });
+                timeline.push({ name: d.toLocaleDateString('en-US', { weekday: 'short' }), minutes: history[dateStr] || 0, date: dateStr });
             }
-        } 
-        else if (range === 'Month') {
-            // 1st to End of Month (Fixed days)
+        } else if (range === 'Month') {
             const year = now.getFullYear();
             const month = now.getMonth();
-            const daysInMonth = new Date(year, month + 1, 0).getDate(); // Get exact days
-
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
             for (let i = 1; i <= daysInMonth; i++) {
-                // Create date string manually to avoid timezone shifts
                 const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-                timeline.push({
-                    name: String(i), // 1, 2, 3...
-                    minutes: history[dateStr] || 0
-                });
+                timeline.push({ name: String(i), minutes: history[dateStr] || 0 });
             }
-        } 
-        else if (range === 'Year') {
-            // Jan to Dec (Fixed 12 months)
+        } else if (range === 'Year') {
             const year = now.getFullYear();
-            
             for (let i = 0; i < 12; i++) {
-                // Sum all minutes for this month
                 let monthlyTotal = 0;
-                // Filter history keys that match "YYYY-MM"
                 const monthPrefix = `${year}-${String(i + 1).padStart(2, '0')}`;
-                Object.keys(history).forEach(dateStr => {
-                    if (dateStr.startsWith(monthPrefix)) monthlyTotal += history[dateStr];
-                });
-
-                timeline.push({
-                    name: new Date(year, i).toLocaleDateString('en-US', { month: 'short' }), // Jan, Feb...
-                    minutes: monthlyTotal
-                });
+                Object.keys(history).forEach(dateStr => { if (dateStr.startsWith(monthPrefix)) monthlyTotal += history[dateStr]; });
+                timeline.push({ name: new Date(year, i).toLocaleDateString('en-US', { month: 'short' }), minutes: monthlyTotal });
             }
-        }
-        else {
-            // All Time (Just show sorted history or defaults)
-            Object.keys(history).sort().forEach(dateStr => {
-                timeline.push({ name: dateStr.slice(5), minutes: history[dateStr] });
-            });
         }
         return timeline;
     };
@@ -507,7 +399,6 @@ const Analysis = ({ data }) => {
     const totalMinutes = trendData.reduce((acc, curr) => acc + curr.minutes, 0);
     const totalHours = (totalMinutes / 60).toFixed(1);
 
-    // Subject data (Global Fallback)
     const subjectData = [
         { name: 'Physics', value: data.subjects["Physics"]?.timeSpent || 0 },
         { name: 'Maths', value: data.subjects["Maths"]?.timeSpent || 0 },
@@ -523,11 +414,16 @@ const Analysis = ({ data }) => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <GlassCard className="flex flex-col justify-center items-center h-40"><span className="text-gray-400 text-xs font-bold uppercase mb-2">Total Time ({range})</span><div className="text-5xl font-bold text-white">{totalHours}<span className="text-2xl text-gray-500">h</span></div></GlassCard>
-                <GlassCard className="flex flex-col justify-center items-center h-40"><span className="text-gray-400 text-xs font-bold uppercase mb-2">Avg / Day</span><div className="text-5xl font-bold text-white">{(totalHours / (trendData.length || 1)).toFixed(1)}<span className="text-2xl text-gray-500">h</span></div></GlassCard>
                 <GlassCard className="flex flex-col justify-center items-center h-40"><span className="text-gray-400 text-xs font-bold uppercase mb-2">Most Studied</span><div className="text-3xl font-bold text-violet-400">{subjectData.sort((a,b) => b.value - a.value)[0]?.name || '-'}</div></GlassCard>
             </div>
+
+            {/* NEW HEATMAP */}
+            <GlassCard className="overflow-hidden">
+                <h3 className="text-lg font-bold text-white mb-4">Study Consistency (Last 365 Days)</h3>
+                <StudyHeatmap history={data.history} />
+            </GlassCard>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <GlassCard className="h-[350px]">
@@ -561,13 +457,12 @@ const Analysis = ({ data }) => {
     );
 };
 
-// --- 6. DASHBOARD (Fixed Week Graph + Streak Only) ---
+// --- 6. DASHBOARD (Countdown & Weekly Graph) ---
 const Dashboard = ({ data, setData, goToTimer, user }) => {
   const today = new Date().toISOString().split('T')[0];
   const history = data.history || {};
   const todayMins = history[today] || 0;
   
-  // Streak Calculation
   let streak = 0;
   if ((history[today] || 0) > 0) streak++;
   let d = new Date(); d.setDate(d.getDate() - 1);
@@ -576,22 +471,30 @@ const Dashboard = ({ data, setData, goToTimer, user }) => {
     if ((history[dateStr] || 0) > 0) { streak++; d.setDate(d.getDate() - 1); } else break;
   }
 
-  // Fixed Weekly Graph (Sun - Sat)
+  // Calculate Countdown
+  const getCountdown = () => {
+      if (!data.examDate) return null;
+      const target = new Date(data.examDate);
+      const now = new Date();
+      const diff = target - now;
+      if (diff < 0) return { days: 0, hours: 0 };
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      return { days, hours };
+  };
+  const countdown = getCountdown();
+
   const getWeeklyData = () => {
     const now = new Date();
-    const currentDay = now.getDay(); // 0-6
+    const currentDay = now.getDay();
     const startOfWeek = new Date(now);
-    startOfWeek.setDate(now.getDate() - currentDay); // Go back to Sunday
-
+    startOfWeek.setDate(now.getDate() - currentDay);
     const chartData = [];
     for (let i = 0; i < 7; i++) {
         const d = new Date(startOfWeek);
         d.setDate(startOfWeek.getDate() + i);
         const dateStr = d.toISOString().split('T')[0];
-        chartData.push({ 
-            name: d.toLocaleDateString('en-US', { weekday: 'short' }), // Sun, Mon
-            hours: parseFloat(((history[dateStr] || 0) / 60).toFixed(1)) 
-        });
+        chartData.push({ name: d.toLocaleDateString('en-US', { weekday: 'short' }), hours: parseFloat(((history[dateStr] || 0) / 60).toFixed(1)) });
     }
     return chartData;
   };
@@ -604,11 +507,18 @@ const Dashboard = ({ data, setData, goToTimer, user }) => {
     <div className="space-y-8 max-w-7xl mx-auto">
       <div className="text-center space-y-8 py-4">
           <div><p className="text-gray-500 text-xs font-bold tracking-widest mb-2 uppercase">TODAY'S FOCUS</p><h1 className="text-8xl font-bold text-white tracking-tighter drop-shadow-2xl">{Math.floor(todayMins/60)}h <span className="text-4xl text-gray-500">{Math.round(todayMins%60)}m</span></h1></div>
-          <div className="flex justify-center">
+          <div className="flex justify-center gap-4">
               <div className="bg-[#18181b] border border-white/10 p-4 rounded-2xl flex flex-col items-center min-w-[150px]">
                   <div className="text-3xl font-bold text-white mb-1">{streak} <span className="text-sm text-orange-500">🔥</span></div>
                   <span className="text-[10px] text-gray-500 uppercase font-bold">Day Streak</span>
               </div>
+              {/* COUNTDOWN CARD */}
+              {countdown && (
+                  <div className="bg-[#18181b] border border-white/10 p-4 rounded-2xl flex flex-col items-center min-w-[150px]">
+                      <div className="text-3xl font-bold text-white mb-1">{countdown.days} <span className="text-sm text-violet-500">d</span></div>
+                      <span className="text-[10px] text-gray-500 uppercase font-bold">To {data.selectedExam || 'Exam'}</span>
+                  </div>
+              )}
           </div>
       </div>
 
@@ -652,31 +562,22 @@ export default function App() {
   const [data, setData] = useState(INITIAL_DATA);
   const [view, setView] = useState('dashboard');
   const [loading, setLoading] = useState(true);
+  const [showExamSelect, setShowExamSelect] = useState(false);
 
-  // --- CHECK FOR NOTIFICATIONS ON APP LOAD ---
   useEffect(() => {
       const checkReminders = () => {
           if (!data.mockTests || data.mockTests.length === 0) return;
-          
           const todayStr = new Date().toISOString().split('T')[0];
-          const tomorrow = new Date();
-          tomorrow.setDate(tomorrow.getDate() + 1);
+          const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
           const tomorrowStr = tomorrow.toISOString().split('T')[0];
-
           data.mockTests.forEach(test => {
               if (test.reminder) {
-                  if (test.date === tomorrowStr) {
-                      new Notification("Upcoming Test Reminder", { body: `Tomorrow: ${test.name} (${test.type})` });
-                  } else if (test.date === todayStr) {
-                      new Notification("Test Day!", { body: `Good luck for ${test.name} today!` });
-                  }
+                  if (test.date === tomorrowStr) new Notification("Upcoming Test Reminder", { body: `Tomorrow: ${test.name} (${test.type})` });
+                  else if (test.date === todayStr) new Notification("Test Day!", { body: `Good luck for ${test.name} today!` });
               }
           });
       };
-
-      if (Notification.permission === 'granted') {
-          checkReminders();
-      }
+      if (Notification.permission === 'granted') checkReminders();
   }, [data.mockTests]);
 
   useEffect(() => {
@@ -685,8 +586,14 @@ export default function App() {
       if (currentUser) {
         const docRef = doc(db, "users", currentUser.uid);
         const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) setData(docSnap.data());
-        else await setDoc(docRef, INITIAL_DATA);
+        if (docSnap.exists()) {
+            const userData = docSnap.data();
+            setData(userData);
+            if (!userData.selectedExam) setShowExamSelect(true); // TRIGGER ONBOARDING IF NO EXAM
+        } else {
+            await setDoc(docRef, INITIAL_DATA);
+            setShowExamSelect(true); // TRIGGER ONBOARDING FOR NEW USER
+        }
       }
       setLoading(false);
     });
@@ -707,18 +614,20 @@ export default function App() {
     const today = new Date().toISOString().split('T')[0];
     const newHistory = { ...data.history, [today]: (data.history?.[today] || 0) + mins };
     const newSubjects = { ...data.subjects, [subject]: { ...data.subjects[subject], timeSpent: data.subjects[subject].timeSpent + seconds } };
-    setData(prev => ({
-      ...prev,
-      subjects: newSubjects,
-      history: newHistory,
-      xp: (prev.xp || 0) + Math.floor(mins),
-    }));
+    setData(prev => ({ ...prev, subjects: newSubjects, history: newHistory, xp: (prev.xp || 0) + Math.floor(mins) }));
   };
 
   const handleLogout = async () => { await signOut(auth); setData(INITIAL_DATA); };
 
+  const handleExamSelect = (examName) => {
+      const config = EXAM_CONFIG[examName];
+      setData(prev => ({ ...prev, selectedExam: examName, examDate: config.date }));
+      setShowExamSelect(false);
+  };
+
   if (loading) return <div className="h-screen bg-[#09090b] flex items-center justify-center text-white">Loading...</div>;
   if (!user) return <LoginScreen />;
+  if (showExamSelect) return <ExamSelectionScreen onSelect={handleExamSelect} />;
 
   return (
     <div className="min-h-screen bg-[#09090b] text-gray-200 font-sans selection:bg-violet-500/30 flex">
@@ -746,7 +655,7 @@ export default function App() {
            <h2 className="text-xl font-bold text-gray-200 capitalize flex items-center gap-2">
              {view === 'kpp' ? 'Physics KPP' : view}
            </h2>
-           <ProfileDropdown user={user} onLogout={handleLogout} />
+           <ProfileDropdown user={user} onLogout={handleLogout} onChangeExam={() => setShowExamSelect(true)} />
         </div>
 
         {view === 'dashboard' && <Dashboard data={data} setData={setData} goToTimer={() => setView('timer')} user={user} />}
