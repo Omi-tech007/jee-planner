@@ -5,7 +5,7 @@ import {
   Plus, Trash2, FileText, TrendingUp, LogOut,
   Timer as TimerIcon, StopCircle, Target, User,
   Settings, Image as ImageIcon, ExternalLink, Maximize, Minimize,
-  PieChart as PieChartIcon, Upload, Bell, Calendar, Edit3, Mail, Lock, KeyRound
+  PieChart as PieChartIcon, Upload, Bell, Calendar, Edit3, Mail, Lock, KeyRound, CheckSquare
 } from 'lucide-react';
 import { 
   BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, 
@@ -28,7 +28,7 @@ import { doc, setDoc, getDoc } from "firebase/firestore";
 import { auth, googleProvider, db } from "./firebase"; 
 
 /**
- * JEEPLANET PRO - v25.0 (Forgot Password Added)
+ * JEEPLANET PRO - v26.0 (Multi-Exam Support)
  */
 
 // --- CONSTANTS & CONFIG ---
@@ -59,8 +59,7 @@ const INITIAL_DATA = {
   xp: 0, 
   darkMode: true,
   bgImage: "",
-  selectedExam: null, 
-  examDate: null      
+  selectedExams: [], // CHANGED: Array for multi-select
 };
 
 // --- UTILITY COMPONENTS ---
@@ -167,7 +166,7 @@ const ProfileDropdown = ({ user, onLogout, onChangeExam }) => {
             </div>
             <div className="p-1 space-y-1">
                <button onClick={() => { setIsOpen(false); onChangeExam(); }} className="w-full flex items-center gap-3 px-3 py-2 text-gray-300 hover:bg-white/10 rounded-lg transition-colors text-xs font-bold">
-                 <Edit3 size={14} /> Change Exam
+                 <Edit3 size={14} /> Change Exams
                </button>
                <button onClick={onLogout} className="w-full flex items-center gap-3 px-3 py-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors text-xs font-bold">
                  <LogOut size={14} /> Log Out
@@ -180,35 +179,59 @@ const ProfileDropdown = ({ user, onLogout, onChangeExam }) => {
   );
 };
 
-// --- EXAM SELECTION SCREEN ---
-const ExamSelectionScreen = ({ onSelect }) => {
+// --- EXAM SELECTION SCREEN (MULTI SELECT) ---
+const ExamSelectionScreen = ({ onSave }) => {
+  const [selected, setSelected] = useState([]);
+
+  const toggleExam = (exam) => {
+    if (selected.includes(exam)) {
+      setSelected(selected.filter(e => e !== exam));
+    } else {
+      setSelected([...selected, exam]);
+    }
+  };
+
   return (
     <div className="h-screen w-full bg-[#09090b] flex flex-col items-center justify-center p-6 overflow-y-auto">
-      <div className="max-w-4xl w-full text-center">
-        <h1 className="text-3xl md:text-5xl font-bold text-white mb-4">Choose Your Goal 🎯</h1>
-        <p className="text-gray-400 mb-10">We will customize your dashboard, mock tests, and countdown based on this.</p>
+      <div className="max-w-5xl w-full text-center">
+        <h1 className="text-3xl md:text-5xl font-bold text-white mb-2">Choose Your Goals 🎯</h1>
+        <p className="text-gray-400 mb-8">Select all the exams you are targeting.</p>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {Object.keys(EXAM_CONFIG).map((exam) => (
-            <button
-              key={exam}
-              onClick={() => onSelect(exam)}
-              className="p-6 bg-white/5 hover:bg-violet-600/20 border border-white/10 hover:border-violet-500 rounded-2xl transition-all group text-left"
-            >
-              <h3 className="text-lg font-bold text-white group-hover:text-violet-400 transition-colors">{exam}</h3>
-              <p className="text-xs text-gray-500 mt-1">Target: {EXAM_CONFIG[exam].date}</p>
-            </button>
-          ))}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-10 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+          {Object.keys(EXAM_CONFIG).map((exam) => {
+            const isSelected = selected.includes(exam);
+            return (
+              <button
+                key={exam}
+                onClick={() => toggleExam(exam)}
+                className={`p-5 rounded-2xl transition-all text-left flex justify-between items-center group border ${isSelected ? 'bg-violet-600/20 border-violet-500' : 'bg-white/5 border-white/10 hover:border-white/30'}`}
+              >
+                <div>
+                  <h3 className={`text-sm font-bold ${isSelected ? 'text-white' : 'text-gray-300 group-hover:text-white'}`}>{exam}</h3>
+                  <p className="text-[10px] text-gray-500 mt-1">Target: {EXAM_CONFIG[exam].date}</p>
+                </div>
+                {isSelected && <CheckCircle size={20} className="text-violet-500" />}
+              </button>
+            );
+          })}
         </div>
+
+        <button 
+          onClick={() => onSave(selected)} 
+          disabled={selected.length === 0}
+          className="px-10 py-4 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition-all active:scale-95 disabled:opacity-50 disabled:scale-100"
+        >
+          Continue with {selected.length} Exam{selected.length !== 1 ? 's' : ''}
+        </button>
       </div>
     </div>
   );
 };
 
-// --- LOGIN SCREEN (UPDATED: Forgot Password) ---
+// --- LOGIN SCREEN ---
 const LoginScreen = () => {
   const [isLogin, setIsLogin] = useState(true);
-  const [isReset, setIsReset] = useState(false); // NEW: Toggle for Reset Mode
+  const [isReset, setIsReset] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -224,15 +247,12 @@ const LoginScreen = () => {
     setIsLoading(true);
     try {
       if (isReset) {
-        // --- PASSWORD RESET LOGIC ---
         await sendPasswordResetEmail(auth, email);
         alert(`Password reset link sent to ${email}. Check your inbox!`);
-        setIsReset(false); // Go back to login
+        setIsReset(false);
       } else if (isLogin) {
-        // --- LOGIN LOGIC ---
         await signInWithEmailAndPassword(auth, email, password);
       } else {
-        // --- SIGN UP LOGIC ---
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         await sendEmailVerification(userCredential.user);
         alert("Verification email sent! Please check your inbox.");
@@ -261,7 +281,6 @@ const LoginScreen = () => {
               <input type="email" placeholder="Email Address" required className="bg-transparent outline-none text-white w-full placeholder-gray-500" value={email} onChange={e => setEmail(e.target.value)} />
             </div>
             
-            {/* Password Field - Hide in Reset Mode */}
             {!isReset && (
                 <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus-within:border-violet-500 transition-colors">
                 <Lock size={20} className="text-gray-400" />
@@ -272,7 +291,6 @@ const LoginScreen = () => {
 
           {error && <p className="text-red-400 text-xs text-center">{error}</p>}
 
-          {/* Forgot Password Link */}
           {!isReset && isLogin && (
               <div className="flex justify-end">
                   <button type="button" onClick={() => setIsReset(true)} className="text-xs text-violet-400 hover:text-violet-300 font-bold">Forgot Password?</button>
@@ -346,7 +364,7 @@ const PhysicsKPP = ({ data, setData }) => {
     return (<div className="space-y-6 max-w-5xl mx-auto"><h1 className="text-3xl font-bold text-white mb-2">Physics KPP Tracker</h1><GlassCard className="border-t-4 border-t-purple-500"><div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4"><input type="text" placeholder="KPP Name (e.g. Rotational-01)" className="bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none" value={newKPP.name} onChange={e => setNewKPP({...newKPP, name: e.target.value})} /><select className="bg-[#18181b] border border-white/10 rounded-lg p-3 text-white outline-none" value={newKPP.chapter} onChange={e => setNewKPP({...newKPP, chapter: e.target.value})}><option value="">Select Physics Chapter</option>{physicsChapters.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select></div><div className="flex flex-wrap gap-4 items-center"><div className="flex items-center gap-2 text-gray-400"><input type="checkbox" className="w-5 h-5 accent-purple-500" checked={newKPP.attempted} onChange={e => setNewKPP({...newKPP, attempted: e.target.checked})} /> Attempted</div><div className="flex items-center gap-2 text-gray-400"><input type="checkbox" className="w-5 h-5 accent-green-500" checked={newKPP.corrected} onChange={e => setNewKPP({...newKPP, corrected: e.target.checked})} /> Corrected</div><div className="flex items-center gap-2"><input type="number" placeholder="My Score" className="w-24 bg-white/5 border border-white/10 rounded-lg p-2 text-white" value={newKPP.myScore} onChange={e => setNewKPP({...newKPP, myScore: parseFloat(e.target.value)})} /><span className="text-gray-500">/</span><input type="number" placeholder="Total" className="w-24 bg-white/5 border border-white/10 rounded-lg p-2 text-white" value={newKPP.totalScore} onChange={e => setNewKPP({...newKPP, totalScore: parseFloat(e.target.value)})} /></div><button onClick={addKPP} className="ml-auto px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold">Add KPP</button></div></GlassCard>{graphData.length > 0 && (<GlassCard className="h-[300px]"><ResponsiveContainer width="100%" height="90%"><BarChart data={graphData}><CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} /><XAxis dataKey="name" stroke="#9ca3af" fontSize={10} tickLine={false} axisLine={false} /><YAxis stroke="#9ca3af" fontSize={10} tickLine={false} axisLine={false} /><RechartsTooltip cursor={{fill: 'rgba(255,255,255,0.05)'}} contentStyle={{backgroundColor: '#18181b', borderColor: '#27272a', color: '#fff'}} /><Bar dataKey="percentage" fill="#8b5cf6" radius={[4,4,0,0]} name="Score %" /></BarChart></ResponsiveContainer></GlassCard>)}<div className="grid gap-3">{(data.kppList || []).slice().reverse().map(kpp => (<div key={kpp.id} className="bg-[#121212] border border-white/10 p-4 rounded-xl flex flex-col md:flex-row items-center justify-between gap-4"><div className="flex-1"><div className="flex items-center gap-3"><span className="font-bold text-white text-lg">{kpp.name}</span><span className="text-xs text-gray-500 px-2 py-1 bg-white/5 rounded">{kpp.chapter}</span></div><div className="flex gap-4 mt-2 text-sm"><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={kpp.attempted} onChange={(e) => updateKPP(kpp.id, 'attempted', e.target.checked)} className="accent-purple-500"/> <span className={kpp.attempted ? "text-purple-400" : "text-gray-500"}>Attempted</span></label><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={kpp.corrected} onChange={(e) => updateKPP(kpp.id, 'corrected', e.target.checked)} className="accent-green-500"/> <span className={kpp.corrected ? "text-green-400" : "text-gray-500"}>Corrected</span></label></div></div><div className="flex items-center gap-4"><div className="text-right"><div className="text-white font-bold text-xl">{kpp.myScore} <span className="text-gray-500 text-sm">/ {kpp.totalScore}</span></div><div className="text-xs text-gray-500">{kpp.totalScore > 0 ? Math.round((kpp.myScore/kpp.totalScore)*100) : 0}%</div></div><button onClick={() => deleteKPP(kpp.id)} className="text-gray-600 hover:text-red-500"><Trash2 size={18} /></button></div></div>))}</div></div>);
 };
 
-// --- 4. SYLLABUS & MOCKS (Unchanged) ---
+// --- 4. SYLLABUS (Unchanged) ---
 const Syllabus = ({ data, setData }) => {
   const [selectedSubject, setSelectedSubject] = useState(SUBJECTS[0]);
   const [gradeView, setGradeView] = useState('11');
@@ -384,21 +402,20 @@ const ChapterItem = ({ subjectName, chapter, onUpdate, onDelete }) => {
   );
 };
 
+// --- MOCK TEST TRACKER (Updated for Multi-Select) ---
 const MockTestTracker = ({ data, setData }) => {
   const [isAdding, setIsAdding] = useState(false);
   const [filterType, setFilterType] = useState('All'); 
-  const [testType, setTestType] = useState(data.selectedExam || 'Mains');
+  const [testType, setTestType] = useState(data.selectedExams?.[0] || 'Mains');
   const [newTest, setNewTest] = useState({ name: '', date: '', p: '', c: '', m: '', maxMarks: 0, reminder: false });
 
+  // Update default max marks when type changes
   useEffect(() => {
-      if(isAdding && data.selectedExam) {
-          const config = EXAM_CONFIG[data.selectedExam];
-          if(config) {
-              setNewTest(prev => ({ ...prev, maxMarks: config.marks || 300 }));
-              setTestType(data.selectedExam);
-          }
+      const config = EXAM_CONFIG[testType];
+      if(config && isAdding) {
+          setNewTest(prev => ({ ...prev, maxMarks: config.marks || 300 }));
       }
-  }, [isAdding, data.selectedExam]);
+  }, [testType, isAdding]);
 
   const requestNotificationPermission = async () => {
       if (!("Notification" in window)) { alert("This browser does not support desktop notification"); return; }
@@ -418,15 +435,22 @@ const MockTestTracker = ({ data, setData }) => {
   };
 
   const deleteTest = (id) => { if(window.confirm("Delete record?")) setData(prev => ({ ...prev, mockTests: prev.mockTests.filter(t => t.id !== id) })); };
-  const filteredTests = (data.mockTests || []).filter(t => { if (filterType === 'All') return true; return t.type.includes(filterType) || (filterType === 'Mains' && !t.type); });
+  const filteredTests = (data.mockTests || []).filter(t => { if (filterType === 'All') return true; return t.type === filterType; });
   const sortedTests = [...filteredTests].sort((a,b) => new Date(a.date) - new Date(b.date));
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
-      <div className="flex justify-between items-center gap-4"><div><h1 className="text-3xl font-bold text-white mb-2">Mock Test Analysis</h1><p className="text-gray-400">Scores by Subject (Stacked)</p></div><div className="flex gap-2"><button onClick={() => setFilterType('All')} className={`px-4 py-2 rounded-lg text-sm font-bold border transition ${filterType==='All' ? 'bg-violet-600 text-white border-violet-600' : 'border-white/10 text-gray-400'}`}>All</button></div><button onClick={() => setIsAdding(!isAdding)} className="px-6 py-3 bg-violet-600 text-white rounded-xl font-bold flex items-center gap-2">{isAdding ? <X size={18}/> : <Plus size={18}/>} {isAdding ? 'Cancel' : 'Log Test'}</button></div>
+      <div className="flex justify-between items-center gap-4"><div><h1 className="text-3xl font-bold text-white mb-2">Mock Test Analysis</h1><p className="text-gray-400">Scores by Subject (Stacked)</p></div><button onClick={() => setIsAdding(!isAdding)} className="px-6 py-3 bg-violet-600 text-white rounded-xl font-bold flex items-center gap-2">{isAdding ? <X size={18}/> : <Plus size={18}/>} {isAdding ? 'Cancel' : 'Log Test'}</button></div>
       {isAdding && (
           <GlassCard className="border-t-4 border-t-violet-500">
-              <div className="mb-6"><label className="text-xs text-gray-400 font-bold uppercase mb-2 block">Exam Type</label><select className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none" value={testType} onChange={(e) => setTestType(e.target.value)}>{Object.keys(EXAM_CONFIG).map(e => <option key={e} value={e}>{e}</option>)}<option value="Custom">Custom</option></select></div>
+              <div className="mb-6">
+                  <label className="text-xs text-gray-400 font-bold uppercase mb-2 block">Exam Type</label>
+                  <select className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none" value={testType} onChange={(e) => setTestType(e.target.value)}>
+                      {/* Show user's selected exams + Custom */}
+                      {(data.selectedExams?.length > 0 ? data.selectedExams : ['JEE Mains (Jan) 2027']).map(e => <option key={e} value={e}>{e}</option>)}
+                      <option value="Custom">Custom</option>
+                  </select>
+              </div>
               <div className="grid grid-cols-2 md:grid-cols-6 gap-4 items-end">
                   <div className="col-span-2 space-y-2"><label className="text-xs text-gray-400 font-bold uppercase">Name</label><input type="text" className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none" value={newTest.name} onChange={e => setNewTest({...newTest, name: e.target.value})} /></div>
                   <div className="space-y-2"><label className="text-xs text-gray-400 font-bold uppercase">Date</label><input type="date" className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none" value={newTest.date} onChange={e => setNewTest({...newTest, date: e.target.value})} /></div>
@@ -445,7 +469,7 @@ const MockTestTracker = ({ data, setData }) => {
   );
 };
 
-// --- 5. ANALYSIS COMPONENT (Updated with Heatmap) ---
+// --- 5. ANALYSIS COMPONENT (Unchanged) ---
 const Analysis = ({ data }) => {
     const [range, setRange] = useState('Week'); // Week, Month, Year, All
 
@@ -546,7 +570,7 @@ const Analysis = ({ data }) => {
     );
 };
 
-// --- 6. DASHBOARD (Countdown & Weekly Graph) ---
+// --- 6. DASHBOARD (Updated with Multi-Countdown) ---
 const Dashboard = ({ data, setData, goToTimer, user }) => {
   const today = new Date().toISOString().split('T')[0];
   const history = data.history || {};
@@ -560,18 +584,27 @@ const Dashboard = ({ data, setData, goToTimer, user }) => {
     if ((history[dateStr] || 0) > 0) { streak++; d.setDate(d.getDate() - 1); } else break;
   }
 
-  // Calculate Countdown
-  const getCountdown = () => {
-      if (!data.examDate) return null;
-      const target = new Date(data.examDate);
-      const now = new Date();
-      const diff = target - now;
-      if (diff < 0) return { days: 0, hours: 0 };
-      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-      return { days, hours };
+  // Calculate Countdowns for ALL selected exams
+  const getCountdowns = () => {
+      const exams = data.selectedExams || [];
+      if (exams.length === 0) return [];
+
+      const results = exams.map(exam => {
+          const config = EXAM_CONFIG[exam];
+          if (!config) return null;
+          const target = new Date(config.date);
+          const now = new Date();
+          const diff = target - now;
+          if (diff < 0) return { exam, days: 0, hours: 0 };
+          const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+          const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+          return { exam, days, hours };
+      }).filter(Boolean);
+
+      // Sort by nearest date
+      return results.sort((a,b) => a.days - b.days);
   };
-  const countdown = getCountdown();
+  const countdowns = getCountdowns();
 
   const getWeeklyData = () => {
     const now = new Date();
@@ -596,18 +629,22 @@ const Dashboard = ({ data, setData, goToTimer, user }) => {
     <div className="space-y-8 max-w-7xl mx-auto">
       <div className="text-center space-y-8 py-4">
           <div><p className="text-gray-500 text-xs font-bold tracking-widest mb-2 uppercase">TODAY'S FOCUS</p><h1 className="text-8xl font-bold text-white tracking-tighter drop-shadow-2xl">{Math.floor(todayMins/60)}h <span className="text-4xl text-gray-500">{Math.round(todayMins%60)}m</span></h1></div>
-          <div className="flex justify-center gap-4">
+          
+          <div className="flex flex-col md:flex-row justify-center gap-4 items-center">
               <div className="bg-[#18181b] border border-white/10 p-4 rounded-2xl flex flex-col items-center min-w-[150px]">
                   <div className="text-3xl font-bold text-white mb-1">{streak} <span className="text-sm text-orange-500">🔥</span></div>
                   <span className="text-[10px] text-gray-500 uppercase font-bold">Day Streak</span>
               </div>
-              {/* COUNTDOWN CARD */}
-              {countdown && (
-                  <div className="bg-[#18181b] border border-white/10 p-4 rounded-2xl flex flex-col items-center min-w-[150px]">
-                      <div className="text-3xl font-bold text-white mb-1">{countdown.days} <span className="text-sm text-violet-500">d</span></div>
-                      <span className="text-[10px] text-gray-500 uppercase font-bold">To {data.selectedExam || 'Exam'}</span>
-                  </div>
-              )}
+              
+              {/* HORIZONTAL SCROLL FOR COUNTDOWNS */}
+              <div className="flex gap-4 overflow-x-auto max-w-full md:max-w-xl pb-2 px-1 snap-x">
+                  {countdowns.map((cd, i) => (
+                      <div key={i} className="bg-[#18181b] border border-white/10 p-4 rounded-2xl flex flex-col items-center min-w-[160px] snap-center">
+                          <div className="text-3xl font-bold text-white mb-1">{cd.days} <span className="text-sm text-violet-500">d</span></div>
+                          <span className="text-[10px] text-gray-500 uppercase font-bold truncate max-w-[140px]" title={cd.exam}>{cd.exam}</span>
+                      </div>
+                  ))}
+              </div>
           </div>
       </div>
 
@@ -677,11 +714,15 @@ export default function App() {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
             const userData = docSnap.data();
+            // Handle legacy data (convert string to array if needed)
+            if (userData.selectedExam && !userData.selectedExams) {
+                userData.selectedExams = [userData.selectedExam];
+            }
             setData(userData);
-            if (!userData.selectedExam) setShowExamSelect(true); // TRIGGER ONBOARDING IF NO EXAM
+            if (!userData.selectedExams || userData.selectedExams.length === 0) setShowExamSelect(true); 
         } else {
             await setDoc(docRef, INITIAL_DATA);
-            setShowExamSelect(true); // TRIGGER ONBOARDING FOR NEW USER
+            setShowExamSelect(true); 
         }
       }
       setLoading(false);
@@ -708,15 +749,14 @@ export default function App() {
 
   const handleLogout = async () => { await signOut(auth); setData(INITIAL_DATA); };
 
-  const handleExamSelect = (examName) => {
-      const config = EXAM_CONFIG[examName];
-      setData(prev => ({ ...prev, selectedExam: examName, examDate: config.date }));
+  const handleExamSelect = (exams) => {
+      setData(prev => ({ ...prev, selectedExams: exams }));
       setShowExamSelect(false);
   };
 
   if (loading) return <div className="h-screen bg-[#09090b] flex items-center justify-center text-white">Loading...</div>;
   if (!user) return <LoginScreen />;
-  if (showExamSelect) return <ExamSelectionScreen onSelect={handleExamSelect} />;
+  if (showExamSelect) return <ExamSelectionScreen onSave={handleExamSelect} />;
 
   if (!user.emailVerified) {
     return (
