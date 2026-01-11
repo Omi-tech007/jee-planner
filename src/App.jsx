@@ -5,7 +5,7 @@ import {
   Plus, Trash2, FileText, TrendingUp, LogOut,
   Timer as TimerIcon, StopCircle, Target, User,
   Settings, Image as ImageIcon, ExternalLink, Maximize, Minimize,
-  PieChart as PieChartIcon, Upload, Bell, Calendar, Edit3, Mail, Lock
+  PieChart as PieChartIcon, Upload, Bell, Calendar, Edit3, Mail, Lock, KeyRound
 } from 'lucide-react';
 import { 
   BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, 
@@ -21,13 +21,14 @@ import {
   onAuthStateChanged,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  sendEmailVerification
+  sendEmailVerification,
+  sendPasswordResetEmail 
 } from "firebase/auth";
 import { doc, setDoc, getDoc } from "firebase/firestore";
 import { auth, googleProvider, db } from "./firebase"; 
 
 /**
- * JEEPLANET PRO - v24.0 (Email Login & Verification)
+ * JEEPLANET PRO - v25.0 (Forgot Password Added)
  */
 
 // --- CONSTANTS & CONFIG ---
@@ -204,9 +205,10 @@ const ExamSelectionScreen = ({ onSelect }) => {
   );
 };
 
-// --- LOGIN SCREEN (UPDATED: Email/Pass + Google) ---
+// --- LOGIN SCREEN (UPDATED: Forgot Password) ---
 const LoginScreen = () => {
   const [isLogin, setIsLogin] = useState(true);
+  const [isReset, setIsReset] = useState(false); // NEW: Toggle for Reset Mode
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -221,9 +223,16 @@ const LoginScreen = () => {
     setError("");
     setIsLoading(true);
     try {
-      if (isLogin) {
+      if (isReset) {
+        // --- PASSWORD RESET LOGIC ---
+        await sendPasswordResetEmail(auth, email);
+        alert(`Password reset link sent to ${email}. Check your inbox!`);
+        setIsReset(false); // Go back to login
+      } else if (isLogin) {
+        // --- LOGIN LOGIC ---
         await signInWithEmailAndPassword(auth, email, password);
       } else {
+        // --- SIGN UP LOGIC ---
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         await sendEmailVerification(userCredential.user);
         alert("Verification email sent! Please check your inbox.");
@@ -240,7 +249,9 @@ const LoginScreen = () => {
         <div className="text-center mb-8">
           <div className="inline-flex p-4 bg-violet-600/20 rounded-full mb-4 animate-pulse"><Zap size={40} className="text-violet-500" /></div>
           <h1 className="text-3xl font-bold text-white">JEEPlanet <span className="text-violet-500">Pro</span></h1>
-          <p className="text-gray-400 text-sm mt-2">{isLogin ? "Welcome back, Aspirant!" : "Start your journey today."}</p>
+          <p className="text-gray-400 text-sm mt-2">
+            {isReset ? "Reset your password" : (isLogin ? "Welcome back, Aspirant!" : "Start your journey today.")}
+          </p>
         </div>
 
         <form onSubmit={handleAuth} className="space-y-4">
@@ -249,35 +260,52 @@ const LoginScreen = () => {
               <Mail size={20} className="text-gray-400" />
               <input type="email" placeholder="Email Address" required className="bg-transparent outline-none text-white w-full placeholder-gray-500" value={email} onChange={e => setEmail(e.target.value)} />
             </div>
-            <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus-within:border-violet-500 transition-colors">
-              <Lock size={20} className="text-gray-400" />
-              <input type="password" placeholder="Password" required className="bg-transparent outline-none text-white w-full placeholder-gray-500" value={password} onChange={e => setPassword(e.target.value)} />
-            </div>
+            
+            {/* Password Field - Hide in Reset Mode */}
+            {!isReset && (
+                <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus-within:border-violet-500 transition-colors">
+                <Lock size={20} className="text-gray-400" />
+                <input type="password" placeholder="Password" required className="bg-transparent outline-none text-white w-full placeholder-gray-500" value={password} onChange={e => setPassword(e.target.value)} />
+                </div>
+            )}
           </div>
 
           {error && <p className="text-red-400 text-xs text-center">{error}</p>}
 
+          {/* Forgot Password Link */}
+          {!isReset && isLogin && (
+              <div className="flex justify-end">
+                  <button type="button" onClick={() => setIsReset(true)} className="text-xs text-violet-400 hover:text-violet-300 font-bold">Forgot Password?</button>
+              </div>
+          )}
+
           <button type="submit" disabled={isLoading} className="w-full py-4 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl transition-all active:scale-95 shadow-lg shadow-violet-600/20 disabled:opacity-50">
-            {isLoading ? "Processing..." : (isLogin ? "Login" : "Create Account")}
+            {isLoading ? "Processing..." : (isReset ? "Send Reset Link" : (isLogin ? "Login" : "Create Account"))}
           </button>
         </form>
 
-        <div className="flex items-center gap-4 my-6">
-          <div className="h-px bg-white/10 flex-1"></div>
-          <span className="text-xs text-gray-500 font-bold uppercase">Or continue with</span>
-          <div className="h-px bg-white/10 flex-1"></div>
-        </div>
+        {isReset ? (
+            <button onClick={() => setIsReset(false)} className="w-full mt-4 text-gray-400 hover:text-white text-sm">Back to Login</button>
+        ) : (
+            <>
+                <div className="flex items-center gap-4 my-6">
+                <div className="h-px bg-white/10 flex-1"></div>
+                <span className="text-xs text-gray-500 font-bold uppercase">Or continue with</span>
+                <div className="h-px bg-white/10 flex-1"></div>
+                </div>
 
-        <button onClick={handleGoogleLogin} className="w-full py-3 bg-white text-black font-bold rounded-xl flex items-center justify-center gap-3 hover:bg-gray-200 transition-transform active:scale-95">
-          <img src="https://www.google.com/favicon.ico" alt="G" className="w-5 h-5" /> Google
-        </button>
+                <button onClick={handleGoogleLogin} className="w-full py-3 bg-white text-black font-bold rounded-xl flex items-center justify-center gap-3 hover:bg-gray-200 transition-transform active:scale-95">
+                <img src="https://www.google.com/favicon.ico" alt="G" className="w-5 h-5" /> Google
+                </button>
 
-        <p className="text-center text-gray-400 text-sm mt-8">
-          {isLogin ? "Don't have an account?" : "Already have an account?"} 
-          <button onClick={() => setIsLogin(!isLogin)} className="text-violet-400 font-bold ml-2 hover:underline">
-            {isLogin ? "Sign Up" : "Login"}
-          </button>
-        </p>
+                <p className="text-center text-gray-400 text-sm mt-8">
+                {isLogin ? "Don't have an account?" : "Already have an account?"} 
+                <button onClick={() => setIsLogin(!isLogin)} className="text-violet-400 font-bold ml-2 hover:underline">
+                    {isLogin ? "Sign Up" : "Login"}
+                </button>
+                </p>
+            </>
+        )}
       </div>
     </div>
   );
@@ -696,8 +724,11 @@ export default function App() {
         <div className="mb-6 p-6 bg-yellow-500/20 rounded-full"><Bell size={48} className="text-yellow-500" /></div>
         <h1 className="text-3xl font-bold mb-4">Verify Your Email 📧</h1>
         <p className="text-gray-400 max-w-md mb-8">We've sent a link to <b>{user.email}</b>. Please click it to unlock your planner.</p>
-        <button onClick={() => window.location.reload()} className="px-8 py-3 bg-violet-600 rounded-xl font-bold hover:bg-violet-700 transition">I've verified it (Refresh)</button>
-        <button onClick={() => signOut(auth)} className="mt-4 text-sm text-gray-500 hover:text-white underline">Log out and try another email</button>
+        <div className="flex gap-4 justify-center">
+            <button onClick={() => window.location.reload()} className="px-8 py-3 bg-violet-600 rounded-xl font-bold hover:bg-violet-700 transition">I've verified it (Refresh)</button>
+            <button onClick={() => {sendEmailVerification(auth.currentUser).then(()=>alert("New link sent!"))}} className="px-8 py-3 bg-white/10 rounded-xl font-bold hover:bg-white/20 transition">Resend Link</button>
+        </div>
+        <button onClick={() => signOut(auth)} className="mt-8 text-sm text-gray-500 hover:text-white underline">Log out and try another email</button>
       </div>
     );
   }
