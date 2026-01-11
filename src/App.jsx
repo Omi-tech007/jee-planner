@@ -62,7 +62,18 @@ const INITIAL_DATA = {
   bgImage: "",
   selectedExams: [], 
 };
+// ... existing constants ...
 
+const THEME_COLORS = [
+  { name: 'Teal', class: 'teal', hex: '#14b8a6' },
+  { name: 'Rose', class: 'rose', hex: '#f43f5e' },
+  { name: 'Violet', class: 'violet', hex: '#8b5cf6' },
+  { name: 'Amber', class: 'amber', hex: '#f59e0b' },
+  { name: 'Cyan', class: 'cyan', hex: '#06b6d4' },
+  { name: 'Slate', class: 'slate', hex: '#64748b' },
+];
+
+// ... code continues ...
 // --- HELPER: GET USER SUBJECTS BASED ON EXAM ---
 const getUserSubjects = (selectedExams = []) => {
   let showMath = false;
@@ -153,10 +164,143 @@ const StudyHeatmap = ({ history }) => {
     </div>
   );
 };
+// --- SETTINGS MODAL COMPONENT ---
+const SettingsModal = ({ isOpen, onClose, data, setData, user }) => {
+  if (!isOpen) return null;
 
+  const currentTheme = data.settings?.theme || 'Violet';
+  const currentMode = data.settings?.mode || 'Dark';
+  const username = data.settings?.username || user.displayName?.split(' ')[0] || "User";
+
+  const handleUpdate = (field, value) => {
+    setData(prev => ({
+      ...prev,
+      settings: { ...prev.settings, [field]: value }
+    }));
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="w-full max-w-4xl bg-[#121212] border border-white/10 rounded-3xl shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto custom-scrollbar"
+      >
+        <div className="p-6 border-b border-white/10 flex justify-between items-start">
+          <div>
+            <h2 className="text-2xl font-bold text-white">Settings</h2>
+            <p className="text-gray-400 text-sm mt-1">Manage your account, appearance, and application settings.</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition">
+            <X size={24} />
+          </button>
+        </div>
+
+        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* Left Column: Profile */}
+          <div className="space-y-6">
+            <div className="border border-white/10 rounded-2xl p-6 bg-white/5">
+              <h3 className="flex items-center gap-2 text-lg font-bold text-white mb-6">
+                <User size={20} /> Profile
+              </h3>
+              
+              <div className="flex items-center gap-4 mb-8">
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold text-white uppercase border-2 border-${currentTheme === 'Violet' ? 'violet' : currentTheme.toLowerCase()}-500 bg-gradient-to-br from-gray-800 to-black`}>
+                  {user.photoURL ? <img src={user.photoURL} alt="Profile" className="w-full h-full rounded-full object-cover" /> : username[0]}
+                </div>
+                <div>
+                  <h4 className="text-white font-bold text-lg">{user.displayName || "Pilot"}</h4>
+                  <p className="text-gray-400 text-sm">{user.email}</p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-bold text-gray-500 uppercase mb-1.5 block">Username</label>
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      value={username} 
+                      onChange={(e) => handleUpdate('username', e.target.value)}
+                      className="flex-1 bg-black/20 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm outline-none focus:border-violet-500 transition"
+                    />
+                    <button className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-xl border border-white/5 transition flex items-center gap-2">
+                      <Edit3 size={14} /> Edit
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-gray-500 mt-2">This is your unique username within the app.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column: Appearance */}
+          <div className="space-y-6">
+            <div className="border border-white/10 rounded-2xl p-6 bg-white/5 h-full">
+              <h3 className="flex items-center gap-2 text-lg font-bold text-white mb-2">
+                <ImageIcon size={20} /> Appearance
+              </h3>
+              <p className="text-gray-400 text-sm mb-6">Customize the look and feel of the app.</p>
+
+              {/* Color Theme */}
+              <div className="mb-8">
+                <label className="text-xs font-bold text-gray-500 uppercase mb-3 block">Color Theme</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {THEME_COLORS.map((theme) => {
+                    const isActive = currentTheme === theme.name;
+                    return (
+                      <button 
+                        key={theme.name}
+                        onClick={() => handleUpdate('theme', theme.name)}
+                        className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${isActive ? 'bg-white/10 border-violet-500 ring-1 ring-violet-500/50' : 'bg-transparent border-white/10 hover:border-white/30'}`}
+                      >
+                        <div className="w-4 h-4 rounded-full shadow-sm" style={{ backgroundColor: theme.hex }}></div>
+                        <span className={`text-sm font-bold ${isActive ? 'text-white' : 'text-gray-400'}`}>{theme.name}</span>
+                        {isActive && <CheckCircle size={14} className="ml-auto text-violet-500" />}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Mode Toggle */}
+              <div>
+                <label className="text-xs font-bold text-gray-500 uppercase mb-3 block">Mode</label>
+                <div className="flex items-center justify-between p-4 rounded-xl border border-white/10 bg-black/20">
+                  <span className="text-sm font-bold text-white">Toggle light or dark mode</span>
+                  <button 
+                    onClick={() => handleUpdate('mode', currentMode === 'Dark' ? 'Light' : 'Dark')}
+                    className="w-12 h-6 rounded-full bg-white/10 border border-white/10 relative transition-colors hover:bg-white/20"
+                  >
+                    <motion.div 
+                      animate={{ x: currentMode === 'Dark' ? 26 : 2 }}
+                      className="absolute top-1 left-0 w-4 h-4 rounded-full bg-white shadow-sm flex items-center justify-center"
+                    >
+                      {currentMode === 'Dark' ? <Zap size={8} className="text-black" /> : <div className="w-1.5 h-1.5 rounded-full bg-black/20" />}
+                    </motion.div>
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+        
+        <div className="p-6 border-t border-white/10 bg-black/20 flex justify-end gap-3">
+          <button onClick={onClose} className="px-6 py-2.5 text-sm font-bold text-gray-400 hover:text-white transition">Cancel</button>
+          <button onClick={onClose} className="px-8 py-2.5 bg-violet-600 hover:bg-violet-700 text-white text-sm font-bold rounded-xl shadow-lg shadow-violet-600/20 transition transform active:scale-95">
+            Save Changes
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
 // --- PROFILE DROPDOWN ---
-const ProfileDropdown = ({ user, onLogout, onChangeExam }) => {
+// --- UPDATED PROFILE DROPDOWN ---
+const ProfileDropdown = ({ user, onLogout, onChangeExam, data, setData }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const dropdownRef = useRef(null);
 
   useEffect(() => {
@@ -168,45 +312,61 @@ const ProfileDropdown = ({ user, onLogout, onChangeExam }) => {
   }, []);
 
   return (
-    <div className="relative" ref={dropdownRef}>
-      <button onClick={() => setIsOpen(!isOpen)} className="flex items-center gap-2 p-1 rounded-full hover:bg-white/5 transition-colors border border-transparent hover:border-white/10">
-        <div className="hidden md:block text-right mr-1">
-          <p className="text-xs font-bold text-white leading-none">{user.displayName?.split(' ')[0] || user.email?.split('@')[0]}</p>
-        </div>
-        {user.photoURL ? (
-          <img src={user.photoURL} alt="Profile" className="w-8 h-8 rounded-full border-2 border-violet-500/50" />
-        ) : (
-          <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-white font-bold border-2 border-violet-400 text-xs uppercase">{user.email?.[0] || "U"}</div>
-        )}
-      </button>
+    <>
+      <SettingsModal 
+        isOpen={showSettings} 
+        onClose={() => setShowSettings(false)} 
+        data={data} 
+        setData={setData} 
+        user={user} 
+      />
 
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div 
-            initial={{ opacity: 0, y: 10, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.95 }}
-            className="absolute right-0 mt-2 w-60 bg-[#18181b] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden"
-          >
-            <div className="p-3 border-b border-white/5 bg-white/5">
-               <p className="text-white font-bold text-sm">{user.displayName || "User"}</p>
-               <p className="text-[10px] text-gray-400 mt-0.5 truncate">{user.email}</p>
-            </div>
-            <div className="p-1 space-y-1">
-               <button onClick={() => { setIsOpen(false); onChangeExam(); }} className="w-full flex items-center gap-3 px-3 py-2 text-gray-300 hover:bg-white/10 rounded-lg transition-colors text-xs font-bold">
-                 <Edit3 size={14} /> Change Exams
-               </button>
-               <button onClick={onLogout} className="w-full flex items-center gap-3 px-3 py-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors text-xs font-bold">
-                 <LogOut size={14} /> Log Out
-               </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
+      <div className="relative" ref={dropdownRef}>
+        <button onClick={() => setIsOpen(!isOpen)} className="flex items-center gap-2 p-1 rounded-full hover:bg-white/5 transition-colors border border-transparent hover:border-white/10">
+          <div className="hidden md:block text-right mr-1">
+            <p className="text-xs font-bold text-white leading-none">
+                {data.settings?.username || user.displayName?.split(' ')[0] || "User"}
+            </p>
+          </div>
+          {user.photoURL ? (
+            <img src={user.photoURL} alt="Profile" className="w-8 h-8 rounded-full border-2 border-violet-500/50" />
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-white font-bold border-2 border-violet-400 text-xs uppercase">{user.email?.[0] || "U"}</div>
+          )}
+        </button>
+
+        <AnimatePresence>
+          {isOpen && (
+            <motion.div 
+              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.95 }}
+              className="absolute right-0 mt-2 w-60 bg-[#18181b] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden"
+            >
+              <div className="p-3 border-b border-white/5 bg-white/5">
+                 <p className="text-white font-bold text-sm">
+                    {data.settings?.username || user.displayName || "User"}
+                 </p>
+                 <p className="text-gray-400 text-sm mt-0.5 truncate">{user.email}</p>
+              </div>
+              <div className="p-1 space-y-1">
+                <button onClick={() => { setIsOpen(false); setShowSettings(true); }} className="w-full flex items-center gap-3 px-3 py-2 text-gray-300 hover:bg-white/10 rounded-lg transition-colors text-xs font-bold">
+                  <Settings size={14} /> Settings
+                </button>
+                <button onClick={() => { setIsOpen(false); onChangeExam(); }} className="w-full flex items-center gap-3 px-3 py-2 text-gray-300 hover:bg-white/10 rounded-lg transition-colors text-xs font-bold">
+                  <Edit3 size={14} /> Change Exams
+                </button>
+                <button onClick={onLogout} className="w-full flex items-center gap-3 px-3 py-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors text-xs font-bold">
+                  <LogOut size={14} /> Log Out
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </>
   );
 };
-
 // --- EXAM SELECTION SCREEN ---
 const ExamSelectionScreen = ({ onSave }) => {
   const [selected, setSelected] = useState([]);
@@ -744,8 +904,13 @@ export default function App() {
            <h2 className="text-xl font-bold text-gray-200 capitalize flex items-center gap-2">
              {view === 'kpp' ? 'Physics KPP' : view}
            </h2>
-           <ProfileDropdown user={user} onLogout={handleLogout} onChangeExam={() => setShowExamSelect(true)} />
-        </div>
+           <ProfileDropdown 
+            user={user} 
+            onLogout={handleLogout} 
+            onChangeExam={() => setShowExamSelect(true)} 
+            data={data} 
+            setData={setData} />
+          </div>
 
         {view === 'dashboard' && <Dashboard data={data} setData={setData} goToTimer={() => setView('timer')} user={user} />}
         {view === 'analysis' && <Analysis data={data} />} 
