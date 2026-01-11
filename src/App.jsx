@@ -29,7 +29,7 @@ import { doc, setDoc, getDoc } from "firebase/firestore";
 import { auth, googleProvider, db } from "./firebase"; 
 
 /**
- * PREPPILOT - v31.0 (Broad Sidebar & Organized Analysis)
+ * PREPPILOT - v32.0 (Stable Release: Fixed Syntax & Layouts)
  */
 
 // --- CONSTANTS ---
@@ -85,10 +85,14 @@ const INITIAL_DATA = {
   selectedExams: [], 
 };
 
-const getUserSubjects = (selectedExams = []) => {
+const getUserSubjects = (selectedExams) => {
   let showMath = false, showBio = false;
-  if (selectedExams.length === 0) return ALL_SUBJECTS;
-  selectedExams.forEach(exam => {
+  // Handle undefined or null selectedExams
+  const exams = selectedExams || [];
+  
+  if (exams.length === 0) return ALL_SUBJECTS;
+  
+  exams.forEach(exam => {
     const type = EXAM_CONFIG[exam]?.type;
     if (type === 'Math') showMath = true;
     if (type === 'Bio') showBio = true;
@@ -122,18 +126,23 @@ const StudyHeatmap = ({ history, theme, isDark }) => {
     return days;
   };
   const data = generateYearData();
+  
+  // Safe color generation function
+  const getCellColor = (intensity) => {
+      if (intensity === 0) return isDark ? 'bg-gray-800' : 'bg-gray-200';
+      if (intensity === 1) return `${theme.light} opacity-40`;
+      if (intensity === 2) return `${theme.light} opacity-70`;
+      if (intensity === 3) return theme.bg;
+      return `${theme.bg} shadow-lg`; // Intensity 4
+  };
+
   return (
     <div className="w-full overflow-x-auto pb-2 no-scrollbar">
       <div className="flex flex-col gap-1 min-w-[600px]">
          <div className="grid grid-rows-7 grid-flow-col gap-1 h-[100px]">
             {data.map((day) => (
               <div key={day.date} title={`${day.date}: ${Math.round((history[day.date]||0)/60)}h`}
-                className={`w-3 h-3 rounded-sm transition-all hover:scale-125 ${
-                  day.intensity === 0 ? (isDark ? 'bg-gray-800' : 'bg-gray-200') :
-                  day.intensity === 1 ? `${theme.light} opacity-40` :
-                  day.intensity === 2 ? `${theme.light} opacity-70` :
-                  day.intensity === 3 ? theme.bg : theme.bg + ' shadow-lg'
-                }`}
+                className={`w-3 h-3 rounded-sm transition-all hover:scale-125 ${getCellColor(day.intensity)}`}
               />
             ))}
          </div>
@@ -207,12 +216,17 @@ const Syllabus = ({ data, setData, theme, isDark }) => {
   const mySubjects = getUserSubjects(data.selectedExams);
   const [selectedSubject, setSelectedSubject] = useState(mySubjects[0]);
   const [gradeView, setGradeView] = useState('11');
-  useEffect(() => { if (!mySubjects.includes(selectedSubject)) setSelectedSubject(mySubjects[0]); }, [data.selectedExams]);
+  
+  useEffect(() => { 
+      if (!mySubjects.includes(selectedSubject)) setSelectedSubject(mySubjects[0]); 
+  }, [data.selectedExams]);
+
   const addChapter = () => { const name = prompt(`Enter Class ${gradeView} Chapter Name:`); const lectures = prompt("Total Main Lectures:"); if (name && lectures) { const newChapter = { id: Date.now().toString(), name, totalLectures: parseInt(lectures), lectures: new Array(parseInt(lectures)).fill(false), grade: gradeView, miscLectures: [], diby: { solved: 0, total: 0 } }; const newData = { ...data }; newData.subjects[selectedSubject].chapters.push(newChapter); setData(newData); } };
   const updateChapter = (updated) => { const newData = { ...data }; const idx = newData.subjects[selectedSubject].chapters.findIndex(c => c.id === updated.id); newData.subjects[selectedSubject].chapters[idx] = updated; setData(newData); };
   const deleteChapter = (id) => { const newData = { ...data }; newData.subjects[selectedSubject].chapters = newData.subjects[selectedSubject].chapters.filter(c => c.id !== id); setData(newData); };
   const filteredChapters = data.subjects[selectedSubject]?.chapters.filter(c => c.grade === gradeView || (!c.grade && gradeView === '11')) || [];
   const textCol = isDark ? 'text-white' : 'text-gray-900';
+
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       <div className="flex justify-between items-center"><h1 className={`text-3xl font-bold ${textCol}`}>Syllabus Tracker</h1><button onClick={addChapter} className={`px-6 py-3 ${theme.bg} text-white rounded-xl font-bold flex items-center gap-2`}><Plus size={18} /> Add Chapter</button></div>
@@ -233,10 +247,14 @@ const ChapterItem = ({ subjectName, chapter, onUpdate, onDelete, theme, isDark }
   const deleteMisc = (miscId) => { onUpdate({ ...chapter, miscLectures: chapter.miscLectures.filter(m => m.id !== miscId) }); };
   const updateDiby = (field, val) => { onUpdate({ ...chapter, diby: { ...(chapter.diby || {solved:0, total:0}), [field]: parseInt(val) || 0 } }); };
   const textCol = isDark ? 'text-white' : 'text-gray-900';
+  
+  // Safe Class Name Generation
+  const iconClass = progress === 100 ? 'bg-green-500/20 text-green-500' : `${theme.light} ${theme.text}`;
+  
   return (
     <GlassCard isDark={isDark}>
       <div className="flex items-center justify-between cursor-pointer" onClick={() => setExpanded(!expanded)}>
-        <div className="flex items-center gap-4"><div className={`p-3 rounded-full ${progress===100 ? 'bg-green-500/20 text-green-500' : `${theme.light} ${theme.text}`}`}>{progress===100 ? <CheckCircle size={24} /> : <BookOpen size={24} />}</div><div><h3 className={`text-xl font-bold ${textCol}`}>{chapter.name}</h3><p className="text-sm text-gray-400">{completed}/{chapter.totalLectures} Main Lecs • {progress}%</p></div></div>
+        <div className="flex items-center gap-4"><div className={`p-3 rounded-full ${iconClass}`}>{progress===100 ? <CheckCircle size={24} /> : <BookOpen size={24} />}</div><div><h3 className={`text-xl font-bold ${textCol}`}>{chapter.name}</h3><p className="text-sm text-gray-400">{completed}/{chapter.totalLectures} Main Lecs • {progress}%</p></div></div>
         <div className="flex gap-2"><button onClick={(e) => {e.stopPropagation(); onDelete(chapter.id);}} className="text-gray-600 hover:text-red-500"><Trash2 size={18}/></button><ChevronRight className={`transition ${expanded?'rotate-90':''}`} /></div>
       </div>
       {expanded && (<div className="mt-6 space-y-6"><div><h4 className="text-xs font-bold text-gray-500 uppercase mb-2">Main Lectures</h4><div className="grid grid-cols-6 md:grid-cols-10 gap-2">{chapter.lectures.map((done, i) => <button key={i} onClick={() => toggleLec(i)} className={`p-2 rounded text-xs font-bold border transition ${done ? `${theme.bg} ${theme.border} text-white` : `border-transparent ${isDark ? 'bg-white/5 text-gray-500' : 'bg-gray-100 text-gray-600'}`}`}>{i+1}</button>)}</div></div>{subjectName === 'Maths' && (<div className={`border p-4 rounded-xl ${isDark ? 'bg-blue-900/10 border-blue-500/20' : 'bg-blue-50 border-blue-200'}`}><h4 className="text-xs font-bold text-blue-400 uppercase mb-3 flex items-center gap-2"><Target size={14}/> DIBY Questions</h4><div className="flex items-center gap-4"><div className="flex items-center gap-2"><span className="text-sm text-gray-400">Solved:</span><input type="number" className={`w-16 border rounded px-2 py-1 text-sm ${isDark ? 'bg-black/30 border-white/10 text-white' : 'bg-white border-gray-300'}`} value={chapter.diby?.solved || 0} onChange={e => updateDiby('solved', e.target.value)} /></div><span className="text-gray-500">/</span><div className="flex items-center gap-2"><span className="text-sm text-gray-400">Total:</span><input type="number" className={`w-16 border rounded px-2 py-1 text-sm ${isDark ? 'bg-black/30 border-white/10 text-white' : 'bg-white border-gray-300'}`} value={chapter.diby?.total || 0} onChange={e => updateDiby('total', e.target.value)} /></div><div className="ml-auto text-blue-400 font-bold">{(chapter.diby?.total > 0 ? Math.round((chapter.diby.solved / chapter.diby.total) * 100) : 0)}% Done</div></div></div>)}<div className={`border-t pt-4 ${isDark ? 'border-white/10' : 'border-black/10'}`}><div className="flex justify-between items-center mb-3"><h4 className="text-xs font-bold text-gray-500 uppercase">Misc Topics (Extra)</h4><button onClick={addMisc} className={`text-xs px-2 py-1 rounded ${isDark ? 'bg-white/10 hover:bg-white/20' : 'bg-black/5 hover:bg-black/10'}`}>+ Add Topic</button></div>{(chapter.miscLectures || []).map(misc => (<div key={misc.id} className="mb-3"><div className="flex justify-between items-center mb-1"><span className={`text-sm ${textCol}`}>{misc.name}</span><button onClick={() => deleteMisc(misc.id)} className="text-red-500 hover:text-red-400"><X size={12}/></button></div><div className="flex flex-wrap gap-2">{misc.checked.map((done, i) => (<button key={i} onClick={() => toggleMisc(misc.id, i)} className={`w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold border transition ${done ? 'bg-gray-600 border-gray-600 text-white' : `border-transparent ${isDark ? 'bg-white/10' : 'bg-gray-200'} text-gray-600`}`}>{i+1}</button>))}</div></div>))}</div></div>)}
