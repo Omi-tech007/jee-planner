@@ -13,7 +13,13 @@ import {
   Legend
 } from 'recharts';
 import { motion, AnimatePresence } from 'framer-motion';
-
+import { 
+  signInWithPopup, 
+  signOut, 
+  onAuthStateChanged,
+  createUserWithEmailAndPassword, // Add this
+  signInWithEmailAndPassword      // Add this
+} from "firebase/auth";
 // --- FIREBASE IMPORTS ---
 import { signInWithPopup, signOut, onAuthStateChanged } from "firebase/auth";
 import { doc, setDoc, getDoc } from "firebase/firestore";
@@ -203,20 +209,47 @@ const ExamSelectionScreen = ({ onSelect }) => {
 
 // --- LOGIN SCREEN ---
 const LoginScreen = () => {
-  const handleLogin = async () => {
-    try { await signInWithPopup(auth, googleProvider); } catch (error) { alert("Login failed: " + error.message); }
-  };
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  const handleGoogle = async () => { /* your existing google code */ };
+
   return (
-    <div className="h-screen w-full bg-[#09090b] flex flex-col items-center justify-center text-center p-6">
-      <div className="mb-8 p-6 bg-violet-600/20 rounded-full animate-pulse"><Zap size={64} className="text-violet-500" /></div>
-      <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 tracking-tight">JEEPlanet <span className="text-violet-500">Pro</span></h1>
-      <button onClick={handleLogin} className="px-8 py-4 bg-white text-black font-bold rounded-xl flex items-center gap-3 hover:bg-gray-200 transition-transform active:scale-95 shadow-xl shadow-white/10">
-        <img src="https://www.google.com/favicon.ico" alt="G" className="w-5 h-5" /> Continue with Google
+    <div className="h-screen w-full bg-[#09090b] flex flex-col items-center justify-center p-6">
+      <h1 className="text-4xl font-bold text-white mb-8">Login to JEEPlanet</h1>
+      
+      {/* Email Input */}
+      <input 
+        type="email" 
+        placeholder="Email" 
+        className="mb-3 p-3 w-80 bg-white/5 border border-white/10 rounded-xl text-white"
+        onChange={(e) => setEmail(e.target.value)}
+      />
+      
+      {/* Password Input */}
+      <input 
+        type="password" 
+        placeholder="Password" 
+        className="mb-6 p-3 w-80 bg-white/5 border border-white/10 rounded-xl text-white"
+        onChange={(e) => setPassword(e.target.value)}
+      />
+
+      <button 
+        onClick={() => handleEmailLogin(email, password)}
+        className="w-80 py-3 bg-violet-600 text-white font-bold rounded-xl mb-4"
+      >
+        Login with Email
+      </button>
+
+      <div className="text-gray-500 mb-4">or</div>
+
+      <button onClick={handleGoogle} className="w-80 py-3 bg-white text-black font-bold rounded-xl flex items-center justify-center gap-3">
+        <img src="https://www.google.com/favicon.ico" alt="G" className="w-5 h-5" /> 
+        Continue with Google
       </button>
     </div>
   );
 };
-
 // --- FOCUS TIMER (Unchanged but included) ---
 const FocusTimer = ({ data, setData, onSaveSession }) => {
   const [mode, setMode] = useState('stopwatch'); const [timeLeft, setTimeLeft] = useState(0); const [initialTimerTime, setInitialTimerTime] = useState(60); const [isActive, setIsActive] = useState(false); const [selectedSub, setSelectedSub] = useState(SUBJECTS[0]); const [showSettings, setShowSettings] = useState(false); const [isFullscreen, setIsFullscreen] = useState(false);
