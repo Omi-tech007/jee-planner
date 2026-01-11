@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   LayoutDashboard, BookOpen, Zap, Flame, Trophy, 
-  Play, Pause, CheckCircle, X, ChevronRight, 
+  Play, Pause, CheckCircle, X, ChevronRight, ChevronLeft,
   Plus, Trash2, FileText, TrendingUp, LogOut,
   Timer as TimerIcon, StopCircle, Target, User,
   Settings, Image as ImageIcon, ExternalLink, Maximize, Minimize,
   PieChart as PieChartIcon, Upload, Bell, Calendar, Edit3, Mail, Lock, KeyRound, CheckSquare,
-  Tag
+  Tag, Menu
 } from 'lucide-react';
 import { 
   BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, 
@@ -29,7 +29,7 @@ import { doc, setDoc, getDoc } from "firebase/firestore";
 import { auth, googleProvider, db } from "./firebase"; 
 
 /**
- * PREPPILOT - v30.0 (Features Restored + Dynamic Themes)
+ * PREPPILOT - v31.0 (Broad Sidebar & Organized Analysis)
  */
 
 // --- CONSTANTS ---
@@ -202,7 +202,7 @@ const ProfileDropdown = ({ user, onLogout, onChangeExam, data, setView, theme, i
   );
 };
 
-// --- SYLLABUS RESTORED ---
+// --- SYLLABUS ---
 const Syllabus = ({ data, setData, theme, isDark }) => {
   const mySubjects = getUserSubjects(data.selectedExams);
   const [selectedSubject, setSelectedSubject] = useState(mySubjects[0]);
@@ -244,7 +244,7 @@ const ChapterItem = ({ subjectName, chapter, onUpdate, onDelete, theme, isDark }
   );
 };
 
-// --- KPP RESTORED ---
+// --- KPP ---
 const PhysicsKPP = ({ data, setData, theme, isDark }) => {
     const [newKPP, setNewKPP] = useState({ name: '', chapter: '', attempted: false, corrected: false, myScore: 0, totalScore: 0 });
     const physicsChapters = data.subjects['Physics']?.chapters || [];
@@ -256,7 +256,7 @@ const PhysicsKPP = ({ data, setData, theme, isDark }) => {
     return (<div className="space-y-6 max-w-5xl mx-auto"><h1 className={`text-3xl font-bold ${textCol} mb-2`}>Physics KPP Tracker</h1><GlassCard className={`border-t-4 ${theme.border}`} isDark={isDark}><div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4"><input type="text" placeholder="KPP Name" className={`border rounded-lg p-3 outline-none ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-black'}`} value={newKPP.name} onChange={e => setNewKPP({...newKPP, name: e.target.value})} /><select className={`border rounded-lg p-3 outline-none ${isDark ? 'bg-[#18181b] border-white/10 text-white' : 'bg-white border-gray-300 text-black'}`} value={newKPP.chapter} onChange={e => setNewKPP({...newKPP, chapter: e.target.value})}><option value="">Select Physics Chapter</option>{physicsChapters.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select></div><div className="flex flex-wrap gap-4 items-center"><label className="flex items-center gap-2 text-gray-500"><input type="checkbox" className={`w-5 h-5 ${theme.ring}`} checked={newKPP.attempted} onChange={e => setNewKPP({...newKPP, attempted: e.target.checked})} /> Attempted</label><label className="flex items-center gap-2 text-gray-500"><input type="checkbox" className="w-5 h-5" checked={newKPP.corrected} onChange={e => setNewKPP({...newKPP, corrected: e.target.checked})} /> Corrected</label><div className="flex items-center gap-2"><input type="number" placeholder="My Score" className={`w-24 border rounded-lg p-2 ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300'}`} value={newKPP.myScore} onChange={e => setNewKPP({...newKPP, myScore: parseFloat(e.target.value)})} /><span className="text-gray-500">/</span><input type="number" placeholder="Total" className={`w-24 border rounded-lg p-2 ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300'}`} value={newKPP.totalScore} onChange={e => setNewKPP({...newKPP, totalScore: parseFloat(e.target.value)})} /></div><button onClick={addKPP} className={`ml-auto px-6 py-2 ${theme.bg} text-white rounded-lg font-bold`}>Add KPP</button></div></GlassCard>{graphData.length > 0 && (<GlassCard className="h-[300px]" isDark={isDark}><ResponsiveContainer width="100%" height="90%"><BarChart data={graphData}><CartesianGrid strokeDasharray="3 3" stroke={isDark ? "rgba(255,255,255,0.05)" : "#eee"} vertical={false} /><XAxis dataKey="name" stroke="#9ca3af" fontSize={10} tickLine={false} axisLine={false} /><YAxis stroke="#9ca3af" fontSize={10} tickLine={false} axisLine={false} /><RechartsTooltip cursor={{fill: 'rgba(255,255,255,0.05)'}} contentStyle={{backgroundColor: isDark ? '#18181b' : '#fff', borderColor: isDark ? '#27272a' : '#ddd', color: isDark ? '#fff' : '#000'}} /><Bar dataKey="percentage" fill={theme.stroke} radius={[4,4,0,0]} name="Score %" /></BarChart></ResponsiveContainer></GlassCard>)}<div className="grid gap-3">{(data.kppList || []).slice().reverse().map(kpp => (<div key={kpp.id} className={`border p-4 rounded-xl flex flex-col md:flex-row items-center justify-between gap-4 ${isDark ? 'bg-[#121212] border-white/10' : 'bg-white border-gray-200'}`}><div className="flex-1"><div className="flex items-center gap-3"><span className={`font-bold text-lg ${textCol}`}>{kpp.name}</span><span className={`text-xs text-gray-500 px-2 py-1 rounded ${isDark ? 'bg-white/5' : 'bg-gray-100'}`}>{kpp.chapter}</span></div><div className="flex gap-4 mt-2 text-sm"><span className={kpp.attempted ? theme.text : "text-gray-500"}>Attempted</span><span className={kpp.corrected ? "text-green-500" : "text-gray-500"}>Corrected</span></div></div><div className="flex items-center gap-4"><div className="text-right"><div className={`font-bold text-xl ${textCol}`}>{kpp.myScore} <span className="text-gray-500 text-sm">/ {kpp.totalScore}</span></div><div className="text-xs text-gray-500">{kpp.totalScore > 0 ? Math.round((kpp.myScore/kpp.totalScore)*100) : 0}%</div></div><button onClick={() => deleteKPP(kpp.id)} className="text-gray-600 hover:text-red-500"><Trash2 size={18} /></button></div></div>))}</div></div>);
 };
 
-// --- TIMER RESTORED ---
+// --- TIMER ---
 const FocusTimer = ({ data, setData, onSaveSession, theme, isDark }) => {
   const [mode, setMode] = useState('stopwatch'); const [timeLeft, setTimeLeft] = useState(0); const [initialTimerTime, setInitialTimerTime] = useState(60); const [isActive, setIsActive] = useState(false); const [showSettings, setShowSettings] = useState(false); const [isFullscreen, setIsFullscreen] = useState(false);
   const mySubjects = getUserSubjects(data.selectedExams); const [selectedSub, setSelectedSub] = useState(mySubjects[0] || "Physics");
@@ -282,7 +282,7 @@ const FocusTimer = ({ data, setData, onSaveSession, theme, isDark }) => {
   );
 };
 
-// --- MOCK TEST RESTORED ---
+// --- MOCK TEST ---
 const MockTestTracker = ({ data, setData, theme, isDark }) => {
   const [isAdding, setIsAdding] = useState(false); const [filterType, setFilterType] = useState('All'); const [testType, setTestType] = useState(data.selectedExams?.[0] || 'Mains'); const [newTest, setNewTest] = useState({ name: '', date: '', p: '', c: '', m: '', maxMarks: 0, reminder: false });
   useEffect(() => { const config = EXAM_CONFIG[testType]; if(config && isAdding) { setNewTest(prev => ({ ...prev, maxMarks: config.marks || 300 })); } }, [testType, isAdding]);
@@ -301,7 +301,7 @@ const MockTestTracker = ({ data, setData, theme, isDark }) => {
   );
 };
 
-// --- DASHBOARD RESTORED ---
+// --- DASHBOARD ---
 const Dashboard = ({ data, setData, goToTimer, user, theme, isDark }) => {
   const today = new Date().toISOString().split('T')[0];
   const history = data.history || {}; const todayMins = history[today] || 0;
@@ -349,23 +349,113 @@ const Dashboard = ({ data, setData, goToTimer, user, theme, isDark }) => {
   );
 };
 
+// --- UPDATED ANALYSIS COMPONENT (YEARLY VIEW + BETTER GRID) ---
 const Analysis = ({ data, theme, isDark }) => {
     const textCol = isDark ? 'text-white' : 'text-gray-900';
     const [range, setRange] = useState('Week');
-    const generateTimeline = () => { const history = data.history || {}; const now = new Date(); const timeline = []; if (range === 'Week') { const currentDay = now.getDay(); const startOfWeek = new Date(now); startOfWeek.setDate(now.getDate() - currentDay); for (let i = 0; i < 7; i++) { const d = new Date(startOfWeek); d.setDate(startOfWeek.getDate() + i); const dateStr = d.toISOString().split('T')[0]; timeline.push({ name: d.toLocaleDateString('en-US', { weekday: 'short' }), minutes: history[dateStr] || 0 }); } } else if (range === 'Month') { const year = now.getFullYear(); const month = now.getMonth(); const daysInMonth = new Date(year, month + 1, 0).getDate(); for (let i = 1; i <= daysInMonth; i++) { const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`; timeline.push({ name: String(i), minutes: history[dateStr] || 0 }); } } return timeline; };
-    const trendData = generateTimeline(); const totalHours = (trendData.reduce((acc, curr) => acc + curr.minutes, 0) / 60).toFixed(1);
+
+    const generateTimeline = () => { 
+        const history = data.history || {}; 
+        const now = new Date(); 
+        const timeline = []; 
+
+        if (range === 'Week') { 
+            const currentDay = now.getDay(); 
+            const startOfWeek = new Date(now); 
+            startOfWeek.setDate(now.getDate() - currentDay); 
+            for (let i = 0; i < 7; i++) { 
+                const d = new Date(startOfWeek); 
+                d.setDate(startOfWeek.getDate() + i); 
+                const dateStr = d.toISOString().split('T')[0]; 
+                timeline.push({ name: d.toLocaleDateString('en-US', { weekday: 'short' }), minutes: history[dateStr] || 0 }); 
+            } 
+        } else if (range === 'Month') { 
+            const year = now.getFullYear(); 
+            const month = now.getMonth(); 
+            const daysInMonth = new Date(year, month + 1, 0).getDate(); 
+            for (let i = 1; i <= daysInMonth; i++) { 
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`; 
+                timeline.push({ name: String(i), minutes: history[dateStr] || 0 }); 
+            } 
+        } else if (range === 'Year') {
+            const year = now.getFullYear();
+            for (let i = 0; i < 12; i++) {
+                let monthlyTotal = 0;
+                const monthPrefix = `${year}-${String(i + 1).padStart(2, '0')}`;
+                Object.keys(history).forEach(dateStr => {
+                    if (dateStr.startsWith(monthPrefix)) monthlyTotal += history[dateStr];
+                });
+                timeline.push({ name: new Date(year, i).toLocaleDateString('en-US', { month: 'short' }), minutes: monthlyTotal });
+            }
+        }
+        return timeline; 
+    };
+
+    const trendData = generateTimeline(); 
+    const totalHours = (trendData.reduce((acc, curr) => acc + curr.minutes, 0) / 60).toFixed(1);
     const subjectData = [{ name: 'Physics', value: data.subjects["Physics"]?.timeSpent || 0 }, { name: 'Maths', value: data.subjects["Maths"]?.timeSpent || 0 }, { name: 'Chemistry', value: (data.subjects["Organic Chem"]?.timeSpent || 0) + (data.subjects["Inorganic Chem"]?.timeSpent || 0) + (data.subjects["Physical Chem"]?.timeSpent || 0) }, { name: 'Biology', value: data.subjects["Biology"]?.timeSpent || 0 }];
+    
     return (
         <div className="space-y-6 max-w-7xl mx-auto">
-            <div className="flex justify-between items-center"><div><h1 className={`text-3xl font-bold ${textCol} mb-1`}>Analysis</h1></div><div className={`flex rounded-lg p-1 ${isDark ? 'bg-white/5' : 'bg-gray-200'}`}>{['Week', 'Month'].map(r => (<button key={r} onClick={() => setRange(r)} className={`px-4 py-2 rounded-md text-sm font-bold transition ${range === r ? `${theme.bg} text-white` : 'text-gray-500'}`}>{r}</button>))}</div></div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6"><GlassCard isDark={isDark} className="flex flex-col justify-center items-center h-40"><span className="text-gray-500 text-xs font-bold uppercase mb-2">Total Time</span><div className={`text-5xl font-bold ${textCol}`}>{totalHours}<span className="text-2xl text-gray-500">h</span></div></GlassCard><GlassCard isDark={isDark} className="flex flex-col justify-center items-center h-40"><span className="text-gray-500 text-xs font-bold uppercase mb-2">Most Studied</span><div className={`text-3xl font-bold ${theme.text}`}>{subjectData.sort((a,b) => b.value - a.value)[0]?.name || '-'}</div></GlassCard></div>
-            <GlassCard isDark={isDark}><h3 className={`text-lg font-bold ${textCol} mb-4`}>Study Heatmap</h3><StudyHeatmap history={data.history} theme={theme} isDark={isDark} /></GlassCard>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6"><GlassCard isDark={isDark} className="h-[350px]"><h3 className={`text-lg font-bold ${textCol} mb-4`}>Trend</h3><ResponsiveContainer><AreaChart data={trendData}><defs><linearGradient id="colorTrend" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={theme.stroke} stopOpacity={0.8}/><stop offset="95%" stopColor={theme.stroke} stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark?"rgba(255,255,255,0.05)":"#eee"} /><XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#9ca3af', fontSize: 10}} /><YAxis hide /><RechartsTooltip contentStyle={{backgroundColor: isDark?'#18181b':'#fff', borderColor: isDark?'#27272a':'#ddd', color: isDark?'#fff':'#000'}} /><Area type="monotone" dataKey="minutes" stroke={theme.stroke} strokeWidth={3} fill="url(#colorTrend)" /></AreaChart></ResponsiveContainer></GlassCard><GlassCard isDark={isDark} className="h-[350px]"><h3 className={`text-lg font-bold ${textCol} mb-4`}>Mix</h3><ResponsiveContainer><PieChart><Pie data={subjectData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">{subjectData.map((e, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} stroke="none"/>)}</Pie><RechartsTooltip contentStyle={{backgroundColor: isDark?'#18181b':'#fff', borderRadius:'8px', border:'none'}} /><Legend verticalAlign="bottom"/></PieChart></ResponsiveContainer></GlassCard></div>
+            <div className="flex justify-between items-center">
+                <div><h1 className={`text-3xl font-bold ${textCol} mb-1`}>Analysis</h1></div>
+                <div className={`flex rounded-lg p-1 ${isDark ? 'bg-white/5' : 'bg-gray-200'}`}>
+                    {['Week', 'Month', 'Year'].map(r => (
+                        <button key={r} onClick={() => setRange(r)} className={`px-4 py-2 rounded-md text-sm font-bold transition ${range === r ? `${theme.bg} text-white` : 'text-gray-500'}`}>{r}</button>
+                    ))}
+                </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <GlassCard isDark={isDark} className="flex flex-col justify-center items-center h-40">
+                    <span className="text-gray-500 text-xs font-bold uppercase mb-2">Total Time</span>
+                    <div className={`text-5xl font-bold ${textCol}`}>{totalHours}<span className="text-2xl text-gray-500">h</span></div>
+                </GlassCard>
+                <GlassCard isDark={isDark} className="flex flex-col justify-center items-center h-40">
+                    <span className="text-gray-500 text-xs font-bold uppercase mb-2">Most Studied</span>
+                    <div className={`text-3xl font-bold ${theme.text}`}>{subjectData.sort((a,b) => b.value - a.value)[0]?.name || '-'}</div>
+                </GlassCard>
+            </div>
+            
+            <GlassCard isDark={isDark}>
+                <h3 className={`text-lg font-bold ${textCol} mb-4`}>Study Heatmap</h3>
+                <StudyHeatmap history={data.history} theme={theme} isDark={isDark} />
+            </GlassCard>
+            
+            {/* Organized Grid for Charts */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <GlassCard isDark={isDark} className="h-[400px]">
+                    <h3 className={`text-lg font-bold ${textCol} mb-4`}>{range}ly Trend</h3>
+                    <ResponsiveContainer width="100%" height="90%">
+                        <AreaChart data={trendData}>
+                            <defs><linearGradient id="colorTrend" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={theme.stroke} stopOpacity={0.8}/><stop offset="95%" stopColor={theme.stroke} stopOpacity={0}/></linearGradient></defs>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark?"rgba(255,255,255,0.05)":"#eee"} />
+                            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#9ca3af', fontSize: 10}} />
+                            <YAxis hide />
+                            <RechartsTooltip contentStyle={{backgroundColor: isDark?'#18181b':'#fff', borderColor: isDark?'#27272a':'#ddd', color: isDark?'#fff':'#000'}} />
+                            <Area type="monotone" dataKey="minutes" stroke={theme.stroke} strokeWidth={3} fill="url(#colorTrend)" />
+                        </AreaChart>
+                    </ResponsiveContainer>
+                </GlassCard>
+                
+                <GlassCard isDark={isDark} className="h-[400px]">
+                    <h3 className={`text-lg font-bold ${textCol} mb-4`}>Subject Mix</h3>
+                    <ResponsiveContainer width="100%" height="90%">
+                        <PieChart>
+                            <Pie data={subjectData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={5} dataKey="value">
+                                {subjectData.map((e, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} stroke="none"/>)}
+                            </Pie>
+                            <RechartsTooltip contentStyle={{backgroundColor: isDark?'#18181b':'#fff', borderRadius:'8px', border:'none', color: isDark ? '#fff' : '#000'}} />
+                            <Legend verticalAlign="bottom"/>
+                        </PieChart>
+                    </ResponsiveContainer>
+                </GlassCard>
+            </div>
         </div>
     );
 };
 
-// --- LOGIN SCREEN RESTORED ---
+// --- LOGIN SCREEN ---
 const LoginScreen = () => {
   const [isLogin, setIsLogin] = useState(true); const [isReset, setIsReset] = useState(false); const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [error, setError] = useState(""); const [isLoading, setIsLoading] = useState(false);
   const handleGoogleLogin = async () => { try { await signInWithPopup(auth, googleProvider); } catch (error) { setError(error.message); } };
@@ -395,6 +485,7 @@ export default function App() {
   const [view, setView] = useState('dashboard');
   const [loading, setLoading] = useState(true);
   const [showExamSelect, setShowExamSelect] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true); // New sidebar state
 
   // --- DERIVE THEME ---
   const theme = getThemeStyles(data.settings?.theme || 'Violet');
@@ -424,18 +515,55 @@ export default function App() {
   if (!user.emailVerified) return <div className="h-screen bg-black flex flex-col items-center justify-center text-white"><h1 className="text-2xl font-bold mb-4">Verify Email</h1><p className="mb-6">Link sent to {user.email}</p><button onClick={()=>window.location.reload()} className="px-6 py-2 bg-violet-600 rounded-lg">Refresh</button></div>;
   if (showExamSelect) return <ExamSelectionScreen onSave={handleExamSelect} />;
 
+  const navItems = [
+    { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' }, 
+    { id: 'timer', icon: TimerIcon, label: 'Timer' }, 
+    { id: 'analysis', icon: PieChartIcon, label: 'Analysis' }, 
+    { id: 'syllabus', icon: BookOpen, label: 'Syllabus' }, 
+    { id: 'mocks', icon: FileText, label: 'Mock Tests' }, 
+    { id: 'kpp', icon: Target, label: 'Physics KPP' }
+  ];
+
   return (
     <div className={`min-h-screen font-sans transition-colors duration-300 flex ${isDark ? 'bg-[#09090b] text-gray-200' : 'bg-gray-100 text-gray-900'}`}>
-      <aside className={`fixed left-0 top-0 h-full w-20 border-r flex flex-col items-center py-8 z-40 hidden md:flex ${isDark ? 'bg-[#09090b] border-white/10' : 'bg-white border-black/10'}`}>
-        <div className={`mb-12 p-3 rounded-xl border ${isDark ? 'bg-white/5 border-white/10' : 'bg-black/5 border-black/10'}`}><Zap size={24} className={theme.text} /></div>
-        <nav className="flex flex-col gap-8 w-full">
-          {[{ id: 'dashboard', icon: LayoutDashboard }, { id: 'timer', icon: TimerIcon }, { id: 'analysis', icon: PieChartIcon }, { id: 'syllabus', icon: BookOpen }, { id: 'mocks', icon: FileText }, { id: 'kpp', icon: Target }].map(item => (
-            <button key={item.id} onClick={() => setView(item.id)} className={`relative w-full flex justify-center py-3 border-l-2 transition-all duration-300 ${view === item.id ? `${theme.border} ${theme.text}` : 'border-transparent text-gray-500 hover:text-gray-400'}`}><item.icon size={24} /></button>
+      {/* EXPANDABLE SIDEBAR */}
+      <aside className={`fixed left-0 top-0 h-full border-r flex flex-col transition-all duration-300 z-40 hidden md:flex ${isSidebarOpen ? 'w-64' : 'w-20'} ${isDark ? 'bg-[#09090b] border-white/10' : 'bg-white border-black/10'}`}>
+        {/* Toggle Button */}
+        <div className="flex items-center justify-between p-6">
+            <div className={`flex items-center gap-3 ${isSidebarOpen ? 'opacity-100' : 'opacity-0 hidden'}`}>
+               <Zap size={24} className={theme.text} />
+               <span className={`font-bold text-lg ${isDark ? 'text-white' : 'text-black'}`}>PrepPilot</span>
+            </div>
+            {!isSidebarOpen && <Zap size={24} className={`${theme.text} mx-auto mb-4`} />}
+            
+            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className={`p-1 rounded hover:bg-white/10 transition ${!isSidebarOpen && 'mx-auto'}`}>
+                {isSidebarOpen ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
+            </button>
+        </div>
+
+        <nav className="flex flex-col gap-2 w-full px-4 mt-4">
+          {navItems.map(item => (
+            <button 
+                key={item.id} 
+                onClick={() => setView(item.id)} 
+                className={`relative flex items-center gap-4 py-3 px-3 rounded-xl transition-all duration-200 group ${view === item.id ? `${theme.bg} text-white shadow-lg shadow-${theme.name.toLowerCase()}-500/20` : 'text-gray-500 hover:bg-white/5 hover:text-gray-300'}`}
+            >
+              <item.icon size={22} />
+              {isSidebarOpen && <span className="font-bold text-sm whitespace-nowrap">{item.label}</span>}
+              
+              {/* Tooltip for collapsed mode */}
+              {!isSidebarOpen && (
+                <span className={`absolute left-14 z-50 px-2 py-1 text-xs font-bold rounded opacity-0 group-hover:opacity-100 transition pointer-events-none whitespace-nowrap ${isDark ? 'bg-white text-black' : 'bg-black text-white'}`}>
+                    {item.label}
+                </span>
+              )}
+            </button>
           ))}
         </nav>
       </aside>
 
-      <main className="md:ml-20 flex-1 p-6 md:p-10 pb-24 h-screen overflow-y-auto custom-scrollbar">
+      {/* MAIN CONTENT AREA - ADJUST MARGIN BASED ON SIDEBAR */}
+      <main className={`flex-1 p-6 md:p-10 pb-24 h-screen overflow-y-auto custom-scrollbar transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-20'}`}>
         <div className={`flex justify-between items-center mb-8 sticky top-0 backdrop-blur-md z-30 py-2 -mt-4 border-b ${isDark ? 'bg-[#09090b]/90 border-white/5' : 'bg-gray-100/90 border-black/5'}`}>
            <h2 className={`text-xl font-bold capitalize flex items-center gap-2 ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>{view === 'kpp' ? 'Physics KPP' : view}</h2>
            <ProfileDropdown user={user} onLogout={handleLogout} onChangeExam={() => setShowExamSelect(true)} data={data} setView={setView} theme={theme} isDark={isDark} />
@@ -450,10 +578,12 @@ export default function App() {
         {view === 'settings' && <SettingsView data={data} setData={setData} user={user} onBack={() => setView('dashboard')} theme={theme} isDark={isDark} />}
       </main>
 
+      {/* MOBILE NAV (Hidden on Desktop) */}
       <div className={`md:hidden fixed bottom-0 left-0 w-full backdrop-blur-md border-t p-4 flex justify-around z-50 ${isDark ? 'bg-[#09090b]/95 border-white/10' : 'bg-white/95 border-black/10'}`}>
         <button onClick={() => setView('dashboard')} className={view === 'dashboard' ? theme.text : 'text-gray-500'}><LayoutDashboard /></button>
         <button onClick={() => setView('timer')} className={view === 'timer' ? theme.text : 'text-gray-500'}><TimerIcon /></button>
         <button onClick={() => setView('syllabus')} className={view === 'syllabus' ? theme.text : 'text-gray-500'}><BookOpen /></button>
+        <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="text-gray-500"><Menu /></button>
       </div>
     </div>
   );
