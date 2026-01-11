@@ -275,6 +275,40 @@ const LoginScreen = () => {
     </div>
   );
 };
+// This part goes inside your "App" function
+if (!user) {
+  return <LoginScreen />;
+}
+
+// NEW: Add this check right here
+if (!user.emailVerified) {
+  return (
+    <div className="h-screen w-full bg-[#09090b] flex flex-col items-center justify-center text-center p-6 text-white">
+      <div className="mb-6 p-6 bg-yellow-500/20 rounded-full">
+        <Bell size={48} className="text-yellow-500" />
+      </div>
+      <h1 className="text-3xl font-bold mb-4">Verify Your Email 📧</h1>
+      <p className="text-gray-400 max-w-md mb-8">
+        We've sent a link to <b>{user.email}</b>. Please click it to unlock your planner.
+      </p>
+      <button 
+        onClick={() => window.location.reload()} 
+        className="px-8 py-3 bg-violet-600 rounded-xl font-bold hover:bg-violet-700 transition"
+      >
+        I've verified it (Refresh)
+      </button>
+      <button 
+        onClick={() => signOut(auth)} 
+        className="mt-4 text-sm text-gray-500 hover:text-white underline"
+      >
+        Log out and try another email
+      </button>
+    </div>
+  );
+}
+
+// If they ARE verified, it will continue to the Dashboard automatically
+
 // --- FOCUS TIMER (Unchanged but included) ---
 const FocusTimer = ({ data, setData, onSaveSession }) => {
   const [mode, setMode] = useState('stopwatch'); const [timeLeft, setTimeLeft] = useState(0); const [initialTimerTime, setInitialTimerTime] = useState(60); const [isActive, setIsActive] = useState(false); const [selectedSub, setSelectedSub] = useState(SUBJECTS[0]); const [showSettings, setShowSettings] = useState(false); const [isFullscreen, setIsFullscreen] = useState(false);
@@ -686,7 +720,7 @@ export default function App() {
   if (loading) return <div className="h-screen bg-[#09090b] flex items-center justify-center text-white">Loading...</div>;
   if (!user) return <LoginScreen />;
   if (showExamSelect) return <ExamSelectionScreen onSelect={handleExamSelect} />;
-  
+
 const handleEmailSignup = async (email, password) => {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
