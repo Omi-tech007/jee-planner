@@ -5,7 +5,7 @@ import {
   Plus, Trash2, FileText, TrendingUp, LogOut,
   Timer as TimerIcon, StopCircle, Target, User,
   Settings, Image as ImageIcon, ExternalLink, Maximize, Minimize,
-  PieChart as PieChartIcon, Upload, Calendar
+  PieChart as PieChartIcon, Upload
 } from 'lucide-react';
 import { 
   BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, 
@@ -20,7 +20,7 @@ import { doc, setDoc, getDoc } from "firebase/firestore";
 import { auth, googleProvider, db } from "./firebase"; 
 
 /**
- * JEEPLANET PRO - v18.0 (Slim Header, Analysis Tab, Local BG Upload)
+ * JEEPLANET PRO - v19.0 (Smart Analysis, Precise Timer, Restored Dash Graph)
  */
 
 // --- CONSTANTS ---
@@ -36,8 +36,7 @@ const INITIAL_DATA = {
   }), {}),
   mockTests: [],
   kppList: [],
-  history: {}, // Format: { "YYYY-MM-DD": minutes }
-  subjectHistory: {}, // New: { "YYYY-MM-DD": { "Physics": 30, "Maths": 60 } } for granular analysis
+  history: {}, 
   xp: 0, 
   darkMode: true,
   bgImage: ""
@@ -121,7 +120,7 @@ const LoginScreen = () => {
   );
 };
 
-// --- 2. FOCUS TIMER (Local Upload + Prominent BG) ---
+// --- 2. FOCUS TIMER (Precise Goal + Native PiP Pause) ---
 const FocusTimer = ({ data, setData, onSaveSession }) => {
   const [mode, setMode] = useState('stopwatch'); 
   const [timeLeft, setTimeLeft] = useState(0); 
@@ -146,7 +145,7 @@ const FocusTimer = ({ data, setData, onSaveSession }) => {
       }
   };
 
-  // Fullscreen
+  // Fullscreen Logic
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) containerRef.current.requestFullscreen().then(() => setIsFullscreen(true)).catch(err => alert("Fullscreen blocked"));
     else document.exitFullscreen().then(() => setIsFullscreen(false));
@@ -157,7 +156,24 @@ const FocusTimer = ({ data, setData, onSaveSession }) => {
       return () => document.removeEventListener("fullscreenchange", handleFsChange);
   }, []);
 
-  // Timer
+  // PiP Pause/Play Sync
+  useEffect(() => {
+      const video = videoRef.current;
+      if (!video) return;
+
+      const handlePause = () => setIsActive(false);
+      const handlePlay = () => setIsActive(true);
+
+      video.addEventListener('pause', handlePause);
+      video.addEventListener('play', handlePlay);
+
+      return () => {
+          video.removeEventListener('pause', handlePause);
+          video.removeEventListener('play', handlePlay);
+      };
+  }, []);
+
+  // Timer Logic
   useEffect(() => {
     let interval = null;
     if (isActive) {
@@ -165,7 +181,10 @@ const FocusTimer = ({ data, setData, onSaveSession }) => {
         setTimeLeft(prev => {
            let newVal = mode === 'timer' ? prev - 1 : prev + 1;
            if (mode === 'timer' && newVal <= 0) { setIsActive(false); alert("Timer Finished!"); return 0; }
-           if (document.pictureInPictureElement && canvasRef.current) updatePiPCanvas(newVal);
+           
+           if (document.pictureInPictureElement && canvasRef.current) {
+               updatePiPCanvas(newVal);
+           }
            document.title = `(${formatTime(newVal)}) JEEPlanet`;
            return newVal;
         });
@@ -218,16 +237,20 @@ const FocusTimer = ({ data, setData, onSaveSession }) => {
     <div 
         ref={containerRef}
         className="h-full flex flex-col relative overflow-hidden rounded-3xl transition-all duration-500 bg-cover bg-center"
-        // --- PROMINENT BACKGROUND (Lighter Overlay) ---
-        style={{ backgroundImage: data.bgImage ? `linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.5)), url(${data.bgImage})` : 'none' }}
+        // Less dark overlay for prominent background
+        style={{ backgroundImage: data.bgImage ? `linear-gradient(rgba(0,0,0,0.2), rgba(0,0,0,0.4)), url(${data.bgImage})` : 'none' }}
     >
       <canvas ref={canvasRef} width={400} height={200} className="hidden" />
       <video ref={videoRef} className="hidden" muted />
 
       <div className="absolute top-4 left-4 right-4 flex justify-between items-start z-20">
+          {/* PRECISE GOAL DISPLAY (No Rounding) */}
           <div className="bg-[#18181b]/90 backdrop-blur border border-white/10 rounded-full py-2 px-4 flex items-center gap-3 w-64 shadow-lg">
              <div className="flex flex-col flex-1">
-                <div className="flex justify-between text-[10px] uppercase font-bold text-gray-400 mb-1"><span>Daily Goal</span><span>{Math.round(todayMins/60)}h / {data.dailyGoal}h</span></div>
+                <div className="flex justify-between text-[10px] uppercase font-bold text-gray-400 mb-1">
+                    <span>Daily Goal</span>
+                    <span>{Math.floor(todayMins/60)}h {Math.round(todayMins%60)}m / {data.dailyGoal}h</span>
+                </div>
                 <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden"><div className="h-full bg-violet-500 transition-all duration-500" style={{width: `${percent}%`}}></div></div>
              </div>
           </div>
@@ -242,14 +265,10 @@ const FocusTimer = ({ data, setData, onSaveSession }) => {
           {showSettings && (
               <motion.div initial={{opacity:0, y:-20}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-20}} className="absolute top-20 right-4 z-30 bg-[#18181b] border border-white/10 p-4 rounded-xl shadow-2xl w-72">
                   <h4 className="text-white font-bold mb-3 flex items-center gap-2"><ImageIcon size={16}/> Custom Background</h4>
-                  
-                  {/* URL Input */}
                   <div className="mb-3">
                       <span className="text-[10px] text-gray-500 uppercase font-bold">Image URL</span>
                       <input type="text" placeholder="Paste URL..." className="w-full bg-white/5 border border-white/10 rounded p-2 text-xs text-white outline-none focus:border-violet-500" value={data.bgImage?.startsWith('data') ? '' : data.bgImage} onChange={(e) => setData({...data, bgImage: e.target.value})} />
                   </div>
-
-                  {/* Local Upload */}
                   <div className="mb-4">
                       <span className="text-[10px] text-gray-500 uppercase font-bold">Or Upload from Device</span>
                       <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleFileUpload} />
@@ -257,7 +276,6 @@ const FocusTimer = ({ data, setData, onSaveSession }) => {
                           <Upload size={14} /> Choose File
                       </button>
                   </div>
-
                   <div className="flex justify-end"><button onClick={() => setData({...data, bgImage: ''})} className="text-xs text-red-400 hover:text-red-300">Remove Image</button></div>
               </motion.div>
           )}
@@ -296,7 +314,7 @@ const FocusTimer = ({ data, setData, onSaveSession }) => {
   );
 };
 
-// --- 3. PHYSICS KPP, SYLLABUS, MOCKS (Unchanged for brevity, but included in export) ---
+// --- 3. PHYSICS KPP --- (Unchanged)
 const PhysicsKPP = ({ data, setData }) => {
     const [newKPP, setNewKPP] = useState({ name: '', chapter: '', attempted: false, corrected: false, myScore: 0, totalScore: 0 });
     const physicsChapters = data.subjects['Physics']?.chapters || [];
@@ -307,6 +325,7 @@ const PhysicsKPP = ({ data, setData }) => {
     return (<div className="space-y-6 max-w-5xl mx-auto"><h1 className="text-3xl font-bold text-white mb-2">Physics KPP Tracker</h1><GlassCard className="border-t-4 border-t-purple-500"><div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4"><input type="text" placeholder="KPP Name (e.g. Rotational-01)" className="bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none" value={newKPP.name} onChange={e => setNewKPP({...newKPP, name: e.target.value})} /><select className="bg-[#18181b] border border-white/10 rounded-lg p-3 text-white outline-none" value={newKPP.chapter} onChange={e => setNewKPP({...newKPP, chapter: e.target.value})}><option value="">Select Physics Chapter</option>{physicsChapters.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select></div><div className="flex flex-wrap gap-4 items-center"><div className="flex items-center gap-2 text-gray-400"><input type="checkbox" className="w-5 h-5 accent-purple-500" checked={newKPP.attempted} onChange={e => setNewKPP({...newKPP, attempted: e.target.checked})} /> Attempted</div><div className="flex items-center gap-2 text-gray-400"><input type="checkbox" className="w-5 h-5 accent-green-500" checked={newKPP.corrected} onChange={e => setNewKPP({...newKPP, corrected: e.target.checked})} /> Corrected</div><div className="flex items-center gap-2"><input type="number" placeholder="My Score" className="w-24 bg-white/5 border border-white/10 rounded-lg p-2 text-white" value={newKPP.myScore} onChange={e => setNewKPP({...newKPP, myScore: parseFloat(e.target.value)})} /><span className="text-gray-500">/</span><input type="number" placeholder="Total" className="w-24 bg-white/5 border border-white/10 rounded-lg p-2 text-white" value={newKPP.totalScore} onChange={e => setNewKPP({...newKPP, totalScore: parseFloat(e.target.value)})} /></div><button onClick={addKPP} className="ml-auto px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold">Add KPP</button></div></GlassCard>{graphData.length > 0 && (<GlassCard className="h-[300px]"><ResponsiveContainer width="100%" height="90%"><BarChart data={graphData}><CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} /><XAxis dataKey="name" stroke="#9ca3af" fontSize={10} tickLine={false} axisLine={false} /><YAxis stroke="#9ca3af" fontSize={10} tickLine={false} axisLine={false} /><RechartsTooltip cursor={{fill: 'rgba(255,255,255,0.05)'}} contentStyle={{backgroundColor: '#18181b', borderColor: '#27272a', color: '#fff'}} /><Bar dataKey="percentage" fill="#8b5cf6" radius={[4,4,0,0]} name="Score %" /></BarChart></ResponsiveContainer></GlassCard>)}<div className="grid gap-3">{(data.kppList || []).slice().reverse().map(kpp => (<div key={kpp.id} className="bg-[#121212] border border-white/10 p-4 rounded-xl flex flex-col md:flex-row items-center justify-between gap-4"><div className="flex-1"><div className="flex items-center gap-3"><span className="font-bold text-white text-lg">{kpp.name}</span><span className="text-xs text-gray-500 px-2 py-1 bg-white/5 rounded">{kpp.chapter}</span></div><div className="flex gap-4 mt-2 text-sm"><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={kpp.attempted} onChange={(e) => updateKPP(kpp.id, 'attempted', e.target.checked)} className="accent-purple-500"/> <span className={kpp.attempted ? "text-purple-400" : "text-gray-500"}>Attempted</span></label><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={kpp.corrected} onChange={(e) => updateKPP(kpp.id, 'corrected', e.target.checked)} className="accent-green-500"/> <span className={kpp.corrected ? "text-green-400" : "text-gray-500"}>Corrected</span></label></div></div><div className="flex items-center gap-4"><div className="text-right"><div className="text-white font-bold text-xl">{kpp.myScore} <span className="text-gray-500 text-sm">/ {kpp.totalScore}</span></div><div className="text-xs text-gray-500">{kpp.totalScore > 0 ? Math.round((kpp.myScore/kpp.totalScore)*100) : 0}%</div></div><button onClick={() => deleteKPP(kpp.id)} className="text-gray-600 hover:text-red-500"><Trash2 size={18} /></button></div></div>))}</div></div>);
 };
 
+// --- 4. SYLLABUS & MOCKS (Unchanged) ---
 const Syllabus = ({ data, setData }) => {
   const [selectedSubject, setSelectedSubject] = useState(SUBJECTS[0]);
   const [gradeView, setGradeView] = useState('11');
@@ -363,57 +382,33 @@ const MockTestTracker = ({ data, setData }) => {
   );
 };
 
-// --- 5. NEW ANALYSIS COMPONENT ---
+// --- 5. ANALYSIS COMPONENT (Smart Axis) ---
 const Analysis = ({ data }) => {
     const [range, setRange] = useState('Week'); // Day, Week, Month, Year, All
 
-    // -- Helper to filter data by range --
     const filterData = () => {
         const now = new Date();
         const history = data.history || {};
-        const subjectHistory = data.subjectHistory || {}; // Ensure this structure exists in future updates
-        
         let filteredHistory = {};
-        let filteredSubjectData = { "Physics": 0, "Maths": 0, "Organic Chem": 0, "Inorganic Chem": 0, "Physical Chem": 0 };
-
+        
         Object.keys(history).forEach(dateStr => {
             const date = new Date(dateStr);
             let include = false;
-            
-            if (range === 'Day') {
-                include = dateStr === now.toISOString().split('T')[0];
-            } else if (range === 'Week') {
-                const diffTime = Math.abs(now - date);
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                include = diffDays <= 7;
-            } else if (range === 'Month') {
-                const diffTime = Math.abs(now - date);
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                include = diffDays <= 30;
-            } else if (range === 'Year') {
-                const diffTime = Math.abs(now - date);
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                include = diffDays <= 365;
-            } else {
-                include = true; // All Time
-            }
+            if (range === 'Day') include = dateStr === now.toISOString().split('T')[0];
+            else if (range === 'Week') include = Math.ceil(Math.abs(now - date) / (1000 * 60 * 60 * 24)) <= 7;
+            else if (range === 'Month') include = Math.ceil(Math.abs(now - date) / (1000 * 60 * 60 * 24)) <= 30;
+            else if (range === 'Year') include = Math.ceil(Math.abs(now - date) / (1000 * 60 * 60 * 24)) <= 365;
+            else include = true;
 
-            if (include) {
-                filteredHistory[dateStr] = history[dateStr];
-                // Note: Subject History aggregation would go here if tracking subjects per day
-            }
+            if (include) filteredHistory[dateStr] = history[dateStr];
         });
 
-        // Fallback for Subject Data (Using global totals if granular history not available)
-        // Ideally, you'd track subject time per day. For now, we show global distribution for All/Year, 
-        // but this is a limitation without refactoring data structure significantly.
-        // We will show Global Subject Distribution for now.
+        // Subject data
         const subjectData = [
             { name: 'Physics', value: data.subjects["Physics"]?.timeSpent || 0 },
             { name: 'Maths', value: data.subjects["Maths"]?.timeSpent || 0 },
             { name: 'Chemistry', value: (data.subjects["Organic Chem"]?.timeSpent || 0) + (data.subjects["Inorganic Chem"]?.timeSpent || 0) + (data.subjects["Physical Chem"]?.timeSpent || 0) }
         ];
-
         return { filteredHistory, subjectData };
     };
 
@@ -421,63 +416,56 @@ const Analysis = ({ data }) => {
     const totalMinutes = Object.values(filteredHistory).reduce((a, b) => a + b, 0);
     const totalHours = (totalMinutes / 60).toFixed(1);
 
-    // Prepare Trend Data
-    const trendData = Object.keys(filteredHistory).sort().map(date => ({
-        name: range === 'Day' ? 'Today' : date.slice(5), // Show MM-DD
-        minutes: filteredHistory[date]
-    }));
+    // --- SMART AXIS LOGIC ---
+    const trendData = Object.keys(filteredHistory).sort().map(dateStr => {
+        const d = new Date(dateStr);
+        let name = dateStr;
+        
+        if (range === 'Week') name = d.toLocaleDateString('en-US', { weekday: 'short' }); // Mon, Tue
+        else if (range === 'Month') name = d.getDate(); // 1, 2, 3
+        else if (range === 'Year') name = d.toLocaleDateString('en-US', { month: 'short' }); // Jan, Feb
+        else name = dateStr.slice(5); // MM-DD for All/Day
+
+        return { name, minutes: filteredHistory[dateStr] };
+    });
 
     return (
         <div className="space-y-6 max-w-7xl mx-auto">
             <div className="flex justify-between items-center">
-                <div>
-                    <h1 className="text-3xl font-bold text-white mb-1">Deep Dive Analysis</h1>
-                    <p className="text-gray-400">Detailed performance metrics</p>
-                </div>
+                <div><h1 className="text-3xl font-bold text-white mb-1">Deep Dive Analysis</h1><p className="text-gray-400">Detailed performance metrics</p></div>
                 <div className="flex bg-white/5 rounded-lg p-1">
-                    {['Day', 'Week', 'Month', 'Year', 'All'].map(r => (
-                        <button key={r} onClick={() => setRange(r)} className={`px-4 py-2 rounded-md text-sm font-bold transition ${range === r ? 'bg-violet-600 text-white' : 'text-gray-400 hover:text-white'}`}>{r}</button>
-                    ))}
+                    {['Day', 'Week', 'Month', 'Year', 'All'].map(r => (<button key={r} onClick={() => setRange(r)} className={`px-4 py-2 rounded-md text-sm font-bold transition ${range === r ? 'bg-violet-600 text-white' : 'text-gray-400 hover:text-white'}`}>{r}</button>))}
                 </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <GlassCard className="flex flex-col justify-center items-center h-40">
-                    <span className="text-gray-400 text-xs font-bold uppercase mb-2">Total Time ({range})</span>
-                    <div className="text-5xl font-bold text-white">{totalHours}<span className="text-2xl text-gray-500">h</span></div>
-                </GlassCard>
-                <GlassCard className="flex flex-col justify-center items-center h-40">
-                    <span className="text-gray-400 text-xs font-bold uppercase mb-2">Avg / Day</span>
-                    <div className="text-5xl font-bold text-white">{range === 'Day' ? totalHours : (totalHours / (Object.keys(filteredHistory).length || 1)).toFixed(1)}<span className="text-2xl text-gray-500">h</span></div>
-                </GlassCard>
-                <GlassCard className="flex flex-col justify-center items-center h-40">
-                    <span className="text-gray-400 text-xs font-bold uppercase mb-2">Most Studied</span>
-                    <div className="text-3xl font-bold text-violet-400">
-                        {subjectData.sort((a,b) => b.value - a.value)[0]?.name || '-'}
-                    </div>
-                </GlassCard>
+                <GlassCard className="flex flex-col justify-center items-center h-40"><span className="text-gray-400 text-xs font-bold uppercase mb-2">Total Time ({range})</span><div className="text-5xl font-bold text-white">{totalHours}<span className="text-2xl text-gray-500">h</span></div></GlassCard>
+                <GlassCard className="flex flex-col justify-center items-center h-40"><span className="text-gray-400 text-xs font-bold uppercase mb-2">Avg / Day</span><div className="text-5xl font-bold text-white">{range === 'Day' ? totalHours : (totalHours / (Object.keys(filteredHistory).length || 1)).toFixed(1)}<span className="text-2xl text-gray-500">h</span></div></GlassCard>
+                <GlassCard className="flex flex-col justify-center items-center h-40"><span className="text-gray-400 text-xs font-bold uppercase mb-2">Most Studied</span><div className="text-3xl font-bold text-violet-400">{subjectData.sort((a,b) => b.value - a.value)[0]?.name || '-'}</div></GlassCard>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <GlassCard className="h-[350px]">
-                    <h3 className="text-lg font-bold text-white mb-4">Study Trend ({range})</h3>
-                    <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={trendData}>
-                            <defs><linearGradient id="colorTrend" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.8}/><stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/></linearGradient></defs>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
-                            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#9ca3af', fontSize: 10}} />
-                            <YAxis hide />
-                            <RechartsTooltip contentStyle={{backgroundColor: '#18181b', borderColor: '#27272a', borderRadius: '8px', color: '#fff'}} />
-                            <Area type="monotone" dataKey="minutes" stroke="#8b5cf6" strokeWidth={3} fill="url(#colorTrend)" />
-                        </AreaChart>
-                    </ResponsiveContainer>
-                </GlassCard>
+                {range !== 'Day' && (
+                    <GlassCard className="h-[350px]">
+                        <h3 className="text-lg font-bold text-white mb-4">Study Trend ({range})</h3>
+                        <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={trendData}>
+                                <defs><linearGradient id="colorTrend" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.8}/><stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/></linearGradient></defs>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#9ca3af', fontSize: 10}} />
+                                <YAxis hide />
+                                <RechartsTooltip contentStyle={{backgroundColor: '#18181b', borderColor: '#27272a', borderRadius: '8px', color: '#fff'}} />
+                                <Area type="monotone" dataKey="minutes" stroke="#8b5cf6" strokeWidth={3} fill="url(#colorTrend)" />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    </GlassCard>
+                )}
 
-                <GlassCard className="h-[350px]">
-                    <h3 className="text-lg font-bold text-white mb-4">Subject Distribution (All Time)</h3>
+                <GlassCard className={range === 'Day' ? "col-span-2 h-[400px]" : "h-[350px]"}>
+                    <h3 className="text-lg font-bold text-white mb-4">Subject Distribution</h3>
                     <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
-                            <Pie data={subjectData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                            <Pie data={subjectData} cx="50%" cy="50%" innerRadius={range==='Day' ? 80 : 60} outerRadius={range==='Day' ? 100 : 80} paddingAngle={5} dataKey="value">
                                 {subjectData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="none"/>)}
                             </Pie>
                             <RechartsTooltip contentStyle={{backgroundColor: '#18181b', borderRadius: '8px', border:'none'}} formatter={(val) => `${Math.round(val/60)}m`} />
@@ -490,14 +478,12 @@ const Analysis = ({ data }) => {
     );
 };
 
-// --- 6. DASHBOARD (UPDATED: TODAY ONLY) ---
+// --- 6. DASHBOARD (Restored Weekly Graph & Removed Active Days) ---
 const Dashboard = ({ data, setData, goToTimer, user }) => {
   const today = new Date().toISOString().split('T')[0];
   const history = data.history || {};
   const todayMins = history[today] || 0;
   
-  // Stats
-  const activeDays = Object.keys(history).filter(k => history[k] > 0).length;
   let streak = 0;
   if ((history[today] || 0) > 0) streak++;
   let d = new Date(); d.setDate(d.getDate() - 1);
@@ -506,54 +492,50 @@ const Dashboard = ({ data, setData, goToTimer, user }) => {
     if ((history[dateStr] || 0) > 0) { streak++; d.setDate(d.getDate() - 1); } else break;
   }
 
+  // Restored Weekly Data Logic
+  const getWeeklyData = () => {
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const chartData = [];
+    for (let i = 6; i >= 0; i--) {
+        const d = new Date(); d.setDate(d.getDate() - i);
+        const dateStr = d.toISOString().split('T')[0];
+        const mins = history[dateStr] || 0;
+        chartData.push({ name: days[d.getDay()], hours: parseFloat((mins / 60).toFixed(1)) });
+    }
+    return chartData;
+  };
+
   const addTask = () => { const t = prompt("Task?"); if(t) setData(prev => ({ ...prev, tasks: [{ id: Date.now(), text: t, completed: false }, ...prev.tasks] })); };
   const toggleTask = (id) => setData(prev => ({ ...prev, tasks: prev.tasks.map(t => t.id === id ? { ...t, completed: !t.completed } : t) }));
   const removeTask = (id) => setData(prev => ({ ...prev, tasks: prev.tasks.filter(t => t.id !== id) }));
-  
-  // NOTE: Detailed subject breakdown per day isn't stored in basic history, 
-  // so Pie Chart on Dashboard still shows global distribution as a fallback, 
-  // but logically "Today" view would require tracking subject-time per day.
-  // For now, let's keep the global Pie chart but labeled clearly, 
-  // or focus purely on Today's total time.
-  const pieData = [
-      { name: 'Physics', value: data.subjects["Physics"]?.timeSpent || 0 }, 
-      { name: 'Maths', value: data.subjects["Maths"]?.timeSpent || 0 }, 
-      { name: 'Chemistry', value: (data.subjects["Organic Chem"]?.timeSpent || 0) + (data.subjects["Inorganic Chem"]?.timeSpent || 0) + (data.subjects["Physical Chem"]?.timeSpent || 0) }
-  ];
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
       <div className="text-center space-y-8 py-4">
           <div><p className="text-gray-500 text-xs font-bold tracking-widest mb-2 uppercase">TODAY'S FOCUS</p><h1 className="text-8xl font-bold text-white tracking-tighter drop-shadow-2xl">{Math.floor(todayMins/60)}h <span className="text-4xl text-gray-500">{Math.round(todayMins%60)}m</span></h1></div>
-          <div className="grid grid-cols-2 gap-4 max-w-md mx-auto">
-              <div className="bg-[#18181b] border border-white/10 p-4 rounded-2xl flex flex-col items-center">
+          <div className="flex justify-center">
+              <div className="bg-[#18181b] border border-white/10 p-4 rounded-2xl flex flex-col items-center min-w-[150px]">
                   <div className="text-3xl font-bold text-white mb-1">{streak} <span className="text-sm text-orange-500">🔥</span></div>
-                  <span className="text-[10px] text-gray-500 uppercase font-bold">Current Streak</span>
-              </div>
-              <div className="bg-[#18181b] border border-white/10 p-4 rounded-2xl flex flex-col items-center">
-                  <div className="text-3xl font-bold text-white mb-1">{activeDays} <span className="text-sm text-violet-500">📅</span></div>
-                  <span className="text-[10px] text-gray-500 uppercase font-bold">Active Days</span>
+                  <span className="text-[10px] text-gray-500 uppercase font-bold">Day Streak</span>
               </div>
           </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <GlassCard className="min-h-[300px] flex flex-col items-center justify-center relative">
-          <h3 className="absolute top-6 left-6 text-lg font-bold text-white">Today's Progress</h3>
-          {/* Using a simple gauge for Today vs Goal */}
-          <div className="relative w-48 h-48">
-             <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                    <Pie data={[{value: todayMins}, {value: (data.dailyGoal*60)-todayMins}]} cx="50%" cy="50%" innerRadius={80} outerRadius={90} startAngle={90} endAngle={-270} dataKey="value">
-                        <Cell fill="#8b5cf6" />
-                        <Cell fill="#333" />
-                    </Pie>
-                </PieChart>
-             </ResponsiveContainer>
-             <div className="absolute inset-0 flex flex-col items-center justify-center">
-                 <span className="text-3xl font-bold text-white">{Math.round((todayMins/(data.dailyGoal*60))*100)}%</span>
-                 <span className="text-xs text-gray-500">of Daily Goal</span>
-             </div>
+        {/* Restored Weekly Graph */}
+        <GlassCard className="min-h-[300px] flex flex-col">
+          <h3 className="text-lg font-bold text-white mb-6">Last 7 Days</h3>
+          <div className="flex-1 w-full min-h-[200px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={getWeeklyData()}>
+                <defs><linearGradient id="colorHours" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.8}/><stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/></linearGradient></defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#9ca3af', fontSize: 12}} dy={10} />
+                <YAxis hide domain={[0, 'auto']} />
+                <RechartsTooltip contentStyle={{backgroundColor: '#18181b', borderColor: '#27272a', borderRadius: '8px', color: '#fff'}} itemStyle={{color: '#a78bfa'}} formatter={(value) => [`${value} hrs`, "Study Time"]} />
+                <Area type="monotone" dataKey="hours" stroke="#8b5cf6" strokeWidth={3} fillOpacity={1} fill="url(#colorHours)" />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
         </GlassCard>
 
@@ -635,7 +617,7 @@ export default function App() {
           {[
             { id: 'dashboard', icon: LayoutDashboard, label: 'Dash' },
             { id: 'timer', icon: TimerIcon, label: 'Timer' }, 
-            { id: 'analysis', icon: PieChartIcon, label: 'Data' }, // NEW TAB
+            { id: 'analysis', icon: PieChartIcon, label: 'Data' }, 
             { id: 'syllabus', icon: BookOpen, label: 'Syllabus' },
             { id: 'mocks', icon: FileText, label: 'Mocks' },
             { id: 'kpp', icon: Target, label: 'Phy KPP' },
