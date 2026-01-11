@@ -211,41 +211,65 @@ const ExamSelectionScreen = ({ onSelect }) => {
 const LoginScreen = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isSignUp, setIsSignUp] = useState(false); // Toggle state
 
-  const handleGoogle = async () => { /* your existing google code */ };
+  const handleGoogle = async () => {
+    try { await signInWithPopup(auth, googleProvider); } 
+    catch (error) { alert("Google Login failed: " + error.message); }
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (isSignUp) {
+      handleEmailSignup(email, password);
+    } else {
+      handleEmailLogin(email, password); // Your existing login function
+    }
+  };
 
   return (
     <div className="h-screen w-full bg-[#09090b] flex flex-col items-center justify-center p-6">
-      <h1 className="text-4xl font-bold text-white mb-8">Login to JEEPlanet</h1>
+      <div className="mb-8 p-6 bg-violet-600/20 rounded-full"><Zap size={48} className="text-violet-500" /></div>
       
-      {/* Email Input */}
-      <input 
-        type="email" 
-        placeholder="Email" 
-        className="mb-3 p-3 w-80 bg-white/5 border border-white/10 rounded-xl text-white"
-        onChange={(e) => setEmail(e.target.value)}
-      />
-      
-      {/* Password Input */}
-      <input 
-        type="password" 
-        placeholder="Password" 
-        className="mb-6 p-3 w-80 bg-white/5 border border-white/10 rounded-xl text-white"
-        onChange={(e) => setPassword(e.target.value)}
-      />
+      <h1 className="text-3xl font-bold text-white mb-2">
+        {isSignUp ? "Create Account" : "Welcome Back"}
+      </h1>
+      <p className="text-gray-500 mb-8">JEEPlanet Pro</p>
 
-      <button 
-        onClick={() => handleEmailLogin(email, password)}
-        className="w-80 py-3 bg-violet-600 text-white font-bold rounded-xl mb-4"
-      >
-        Login with Email
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3 w-80">
+        <input 
+          type="email" 
+          placeholder="Email Address" 
+          className="p-3 bg-white/5 border border-white/10 rounded-xl text-white outline-none focus:border-violet-500"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+        />
+        <input 
+          type="password" 
+          placeholder="Password" 
+          className="p-3 bg-white/5 border border-white/10 rounded-xl text-white outline-none focus:border-violet-500"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+        />
+        <button type="submit" className="py-3 bg-violet-600 text-white font-bold rounded-xl mt-2 hover:bg-violet-700 transition">
+          {isSignUp ? "Sign Up" : "Login"}
+        </button>
+      </form>
+
+      <button onClick={() => setIsSignUp(!isSignUp)} className="mt-4 text-sm text-gray-400 hover:text-white">
+        {isSignUp ? "Already have an account? Login" : "Don't have an account? Sign Up"}
       </button>
 
-      <div className="text-gray-500 mb-4">or</div>
+      <div className="flex items-center gap-4 w-80 my-6">
+        <div className="h-[1px] bg-white/10 flex-1"></div>
+        <span className="text-gray-600 text-xs font-bold">OR</span>
+        <div className="h-[1px] bg-white/10 flex-1"></div>
+      </div>
 
-      <button onClick={handleGoogle} className="w-80 py-3 bg-white text-black font-bold rounded-xl flex items-center justify-center gap-3">
-        <img src="https://www.google.com/favicon.ico" alt="G" className="w-5 h-5" /> 
-        Continue with Google
+      <button onClick={handleGoogle} className="w-80 py-3 bg-white text-black font-bold rounded-xl flex items-center justify-center gap-3 hover:bg-gray-200 transition">
+        <img src="https://www.google.com/favicon.ico" alt="G" className="w-5 h-5" /> Continue with Google
       </button>
     </div>
   );
@@ -708,3 +732,17 @@ export default function App() {
     </div>
   );
 }
+const handleEmailSignup = async (email, password) => {
+  try {
+    // This creates the user in Firebase Authentication
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const newUser = userCredential.user;
+
+    // This creates their empty "folder" in your database
+    await setDoc(doc(db, "users", newUser.uid), INITIAL_DATA);
+    
+    alert("Account created successfully! You are now logged in.");
+  } catch (error) {
+    alert("Sign Up Error: " + error.message);
+  }
+};
