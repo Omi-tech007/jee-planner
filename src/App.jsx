@@ -20,7 +20,7 @@ import { doc, setDoc, getDoc } from "firebase/firestore";
 import { auth, googleProvider, db } from "./firebase"; 
 
 /**
- * JEEPLANET PRO - v19.0 (Smart Analysis, Precise Timer, Restored Dash Graph)
+ * JEEPLANET PRO - v20.0 (Fixed Axis: Full Week/Month/Year + Zero Filling)
  */
 
 // --- CONSTANTS ---
@@ -120,7 +120,7 @@ const LoginScreen = () => {
   );
 };
 
-// --- 2. FOCUS TIMER (Precise Goal + Native PiP Pause) ---
+// --- 2. FOCUS TIMER ---
 const FocusTimer = ({ data, setData, onSaveSession }) => {
   const [mode, setMode] = useState('stopwatch'); 
   const [timeLeft, setTimeLeft] = useState(0); 
@@ -135,7 +135,7 @@ const FocusTimer = ({ data, setData, onSaveSession }) => {
   const videoRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  // File Upload Handler
+  // File Upload
   const handleFileUpload = (e) => {
       const file = e.target.files[0];
       if(file) {
@@ -145,7 +145,7 @@ const FocusTimer = ({ data, setData, onSaveSession }) => {
       }
   };
 
-  // Fullscreen Logic
+  // Fullscreen
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) containerRef.current.requestFullscreen().then(() => setIsFullscreen(true)).catch(err => alert("Fullscreen blocked"));
     else document.exitFullscreen().then(() => setIsFullscreen(false));
@@ -156,24 +156,21 @@ const FocusTimer = ({ data, setData, onSaveSession }) => {
       return () => document.removeEventListener("fullscreenchange", handleFsChange);
   }, []);
 
-  // PiP Pause/Play Sync
+  // PiP Sync
   useEffect(() => {
       const video = videoRef.current;
       if (!video) return;
-
       const handlePause = () => setIsActive(false);
       const handlePlay = () => setIsActive(true);
-
       video.addEventListener('pause', handlePause);
       video.addEventListener('play', handlePlay);
-
       return () => {
           video.removeEventListener('pause', handlePause);
           video.removeEventListener('play', handlePlay);
       };
   }, []);
 
-  // Timer Logic
+  // Timer
   useEffect(() => {
     let interval = null;
     if (isActive) {
@@ -181,10 +178,7 @@ const FocusTimer = ({ data, setData, onSaveSession }) => {
         setTimeLeft(prev => {
            let newVal = mode === 'timer' ? prev - 1 : prev + 1;
            if (mode === 'timer' && newVal <= 0) { setIsActive(false); alert("Timer Finished!"); return 0; }
-           
-           if (document.pictureInPictureElement && canvasRef.current) {
-               updatePiPCanvas(newVal);
-           }
+           if (document.pictureInPictureElement && canvasRef.current) updatePiPCanvas(newVal);
            document.title = `(${formatTime(newVal)}) JEEPlanet`;
            return newVal;
         });
@@ -237,19 +231,18 @@ const FocusTimer = ({ data, setData, onSaveSession }) => {
     <div 
         ref={containerRef}
         className="h-full flex flex-col relative overflow-hidden rounded-3xl transition-all duration-500 bg-cover bg-center"
-        // Less dark overlay for prominent background
         style={{ backgroundImage: data.bgImage ? `linear-gradient(rgba(0,0,0,0.2), rgba(0,0,0,0.4)), url(${data.bgImage})` : 'none' }}
     >
       <canvas ref={canvasRef} width={400} height={200} className="hidden" />
       <video ref={videoRef} className="hidden" muted />
 
       <div className="absolute top-4 left-4 right-4 flex justify-between items-start z-20">
-          {/* PRECISE GOAL DISPLAY (No Rounding) */}
           <div className="bg-[#18181b]/90 backdrop-blur border border-white/10 rounded-full py-2 px-4 flex items-center gap-3 w-64 shadow-lg">
              <div className="flex flex-col flex-1">
                 <div className="flex justify-between text-[10px] uppercase font-bold text-gray-400 mb-1">
                     <span>Daily Goal</span>
-                    <span>{Math.floor(todayMins/60)}h {Math.round(todayMins%60)}m / {data.dailyGoal}h</span>
+                    {/* PRECISE GOAL - NO ROUNDING */}
+                    <span>{Math.floor(todayMins/60)}h {Math.round(todayMins%60)}m / {data.dailyGoal}h 0m</span>
                 </div>
                 <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden"><div className="h-full bg-violet-500 transition-all duration-500" style={{width: `${percent}%`}}></div></div>
              </div>
@@ -382,90 +375,122 @@ const MockTestTracker = ({ data, setData }) => {
   );
 };
 
-// --- 5. ANALYSIS COMPONENT (Smart Axis) ---
+// --- 5. ANALYSIS COMPONENT (Fixed Axis & Zero Filling) ---
 const Analysis = ({ data }) => {
-    const [range, setRange] = useState('Week'); // Day, Week, Month, Year, All
+    const [range, setRange] = useState('Week'); // Week, Month, Year, All
 
-    const filterData = () => {
-        const now = new Date();
+    // -- Helper to Generate Fixed Timeline --
+    const generateTimeline = () => {
         const history = data.history || {};
-        let filteredHistory = {};
-        
-        Object.keys(history).forEach(dateStr => {
-            const date = new Date(dateStr);
-            let include = false;
-            if (range === 'Day') include = dateStr === now.toISOString().split('T')[0];
-            else if (range === 'Week') include = Math.ceil(Math.abs(now - date) / (1000 * 60 * 60 * 24)) <= 7;
-            else if (range === 'Month') include = Math.ceil(Math.abs(now - date) / (1000 * 60 * 60 * 24)) <= 30;
-            else if (range === 'Year') include = Math.ceil(Math.abs(now - date) / (1000 * 60 * 60 * 24)) <= 365;
-            else include = true;
+        const now = new Date();
+        const timeline = [];
 
-            if (include) filteredHistory[dateStr] = history[dateStr];
-        });
+        if (range === 'Week') {
+            // Sunday to Saturday (Fixed 7 days)
+            const currentDay = now.getDay(); // 0 = Sun, 6 = Sat
+            const startOfWeek = new Date(now);
+            startOfWeek.setDate(now.getDate() - currentDay); // Go back to Sunday
 
-        // Subject data
-        const subjectData = [
-            { name: 'Physics', value: data.subjects["Physics"]?.timeSpent || 0 },
-            { name: 'Maths', value: data.subjects["Maths"]?.timeSpent || 0 },
-            { name: 'Chemistry', value: (data.subjects["Organic Chem"]?.timeSpent || 0) + (data.subjects["Inorganic Chem"]?.timeSpent || 0) + (data.subjects["Physical Chem"]?.timeSpent || 0) }
-        ];
-        return { filteredHistory, subjectData };
+            for (let i = 0; i < 7; i++) {
+                const d = new Date(startOfWeek);
+                d.setDate(startOfWeek.getDate() + i);
+                const dateStr = d.toISOString().split('T')[0];
+                timeline.push({
+                    name: d.toLocaleDateString('en-US', { weekday: 'short' }), // Sun, Mon...
+                    minutes: history[dateStr] || 0, // Fill 0 if no data
+                    date: dateStr // Keep for reference
+                });
+            }
+        } 
+        else if (range === 'Month') {
+            // 1st to End of Month (Fixed days)
+            const year = now.getFullYear();
+            const month = now.getMonth();
+            const daysInMonth = new Date(year, month + 1, 0).getDate(); // Get exact days
+
+            for (let i = 1; i <= daysInMonth; i++) {
+                // Create date string manually to avoid timezone shifts
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+                timeline.push({
+                    name: String(i), // 1, 2, 3...
+                    minutes: history[dateStr] || 0
+                });
+            }
+        } 
+        else if (range === 'Year') {
+            // Jan to Dec (Fixed 12 months)
+            const year = now.getFullYear();
+            
+            for (let i = 0; i < 12; i++) {
+                // Sum all minutes for this month
+                let monthlyTotal = 0;
+                // Filter history keys that match "YYYY-MM"
+                const monthPrefix = `${year}-${String(i + 1).padStart(2, '0')}`;
+                Object.keys(history).forEach(dateStr => {
+                    if (dateStr.startsWith(monthPrefix)) monthlyTotal += history[dateStr];
+                });
+
+                timeline.push({
+                    name: new Date(year, i).toLocaleDateString('en-US', { month: 'short' }), // Jan, Feb...
+                    minutes: monthlyTotal
+                });
+            }
+        }
+        else {
+            // All Time (Just show sorted history or defaults)
+            Object.keys(history).sort().forEach(dateStr => {
+                timeline.push({ name: dateStr.slice(5), minutes: history[dateStr] });
+            });
+        }
+        return timeline;
     };
 
-    const { filteredHistory, subjectData } = filterData();
-    const totalMinutes = Object.values(filteredHistory).reduce((a, b) => a + b, 0);
+    const trendData = generateTimeline();
+    const totalMinutes = trendData.reduce((acc, curr) => acc + curr.minutes, 0);
     const totalHours = (totalMinutes / 60).toFixed(1);
 
-    // --- SMART AXIS LOGIC ---
-    const trendData = Object.keys(filteredHistory).sort().map(dateStr => {
-        const d = new Date(dateStr);
-        let name = dateStr;
-        
-        if (range === 'Week') name = d.toLocaleDateString('en-US', { weekday: 'short' }); // Mon, Tue
-        else if (range === 'Month') name = d.getDate(); // 1, 2, 3
-        else if (range === 'Year') name = d.toLocaleDateString('en-US', { month: 'short' }); // Jan, Feb
-        else name = dateStr.slice(5); // MM-DD for All/Day
-
-        return { name, minutes: filteredHistory[dateStr] };
-    });
+    // Subject data (Global Fallback)
+    const subjectData = [
+        { name: 'Physics', value: data.subjects["Physics"]?.timeSpent || 0 },
+        { name: 'Maths', value: data.subjects["Maths"]?.timeSpent || 0 },
+        { name: 'Chemistry', value: (data.subjects["Organic Chem"]?.timeSpent || 0) + (data.subjects["Inorganic Chem"]?.timeSpent || 0) + (data.subjects["Physical Chem"]?.timeSpent || 0) }
+    ];
 
     return (
         <div className="space-y-6 max-w-7xl mx-auto">
             <div className="flex justify-between items-center">
                 <div><h1 className="text-3xl font-bold text-white mb-1">Deep Dive Analysis</h1><p className="text-gray-400">Detailed performance metrics</p></div>
                 <div className="flex bg-white/5 rounded-lg p-1">
-                    {['Day', 'Week', 'Month', 'Year', 'All'].map(r => (<button key={r} onClick={() => setRange(r)} className={`px-4 py-2 rounded-md text-sm font-bold transition ${range === r ? 'bg-violet-600 text-white' : 'text-gray-400 hover:text-white'}`}>{r}</button>))}
+                    {['Week', 'Month', 'Year'].map(r => (<button key={r} onClick={() => setRange(r)} className={`px-4 py-2 rounded-md text-sm font-bold transition ${range === r ? 'bg-violet-600 text-white' : 'text-gray-400 hover:text-white'}`}>{r}</button>))}
                 </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <GlassCard className="flex flex-col justify-center items-center h-40"><span className="text-gray-400 text-xs font-bold uppercase mb-2">Total Time ({range})</span><div className="text-5xl font-bold text-white">{totalHours}<span className="text-2xl text-gray-500">h</span></div></GlassCard>
-                <GlassCard className="flex flex-col justify-center items-center h-40"><span className="text-gray-400 text-xs font-bold uppercase mb-2">Avg / Day</span><div className="text-5xl font-bold text-white">{range === 'Day' ? totalHours : (totalHours / (Object.keys(filteredHistory).length || 1)).toFixed(1)}<span className="text-2xl text-gray-500">h</span></div></GlassCard>
+                <GlassCard className="flex flex-col justify-center items-center h-40"><span className="text-gray-400 text-xs font-bold uppercase mb-2">Avg / Day</span><div className="text-5xl font-bold text-white">{(totalHours / (trendData.length || 1)).toFixed(1)}<span className="text-2xl text-gray-500">h</span></div></GlassCard>
                 <GlassCard className="flex flex-col justify-center items-center h-40"><span className="text-gray-400 text-xs font-bold uppercase mb-2">Most Studied</span><div className="text-3xl font-bold text-violet-400">{subjectData.sort((a,b) => b.value - a.value)[0]?.name || '-'}</div></GlassCard>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {range !== 'Day' && (
-                    <GlassCard className="h-[350px]">
-                        <h3 className="text-lg font-bold text-white mb-4">Study Trend ({range})</h3>
-                        <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={trendData}>
-                                <defs><linearGradient id="colorTrend" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.8}/><stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/></linearGradient></defs>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
-                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#9ca3af', fontSize: 10}} />
-                                <YAxis hide />
-                                <RechartsTooltip contentStyle={{backgroundColor: '#18181b', borderColor: '#27272a', borderRadius: '8px', color: '#fff'}} />
-                                <Area type="monotone" dataKey="minutes" stroke="#8b5cf6" strokeWidth={3} fill="url(#colorTrend)" />
-                            </AreaChart>
-                        </ResponsiveContainer>
-                    </GlassCard>
-                )}
+                <GlassCard className="h-[350px]">
+                    <h3 className="text-lg font-bold text-white mb-4">Study Trend ({range})</h3>
+                    <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={trendData}>
+                            <defs><linearGradient id="colorTrend" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.8}/><stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/></linearGradient></defs>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#9ca3af', fontSize: 10}} />
+                            <YAxis hide />
+                            <RechartsTooltip contentStyle={{backgroundColor: '#18181b', borderColor: '#27272a', borderRadius: '8px', color: '#fff'}} formatter={(val) => [`${Math.round(val)}m`, 'Study Time']} />
+                            <Area type="monotone" dataKey="minutes" stroke="#8b5cf6" strokeWidth={3} fill="url(#colorTrend)" />
+                        </AreaChart>
+                    </ResponsiveContainer>
+                </GlassCard>
 
-                <GlassCard className={range === 'Day' ? "col-span-2 h-[400px]" : "h-[350px]"}>
+                <GlassCard className="h-[350px]">
                     <h3 className="text-lg font-bold text-white mb-4">Subject Distribution</h3>
                     <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
-                            <Pie data={subjectData} cx="50%" cy="50%" innerRadius={range==='Day' ? 80 : 60} outerRadius={range==='Day' ? 100 : 80} paddingAngle={5} dataKey="value">
+                            <Pie data={subjectData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
                                 {subjectData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="none"/>)}
                             </Pie>
                             <RechartsTooltip contentStyle={{backgroundColor: '#18181b', borderRadius: '8px', border:'none'}} formatter={(val) => `${Math.round(val/60)}m`} />
@@ -478,12 +503,13 @@ const Analysis = ({ data }) => {
     );
 };
 
-// --- 6. DASHBOARD (Restored Weekly Graph & Removed Active Days) ---
+// --- 6. DASHBOARD (Fixed Week Graph + Streak Only) ---
 const Dashboard = ({ data, setData, goToTimer, user }) => {
   const today = new Date().toISOString().split('T')[0];
   const history = data.history || {};
   const todayMins = history[today] || 0;
   
+  // Streak Calculation
   let streak = 0;
   if ((history[today] || 0) > 0) streak++;
   let d = new Date(); d.setDate(d.getDate() - 1);
@@ -492,15 +518,22 @@ const Dashboard = ({ data, setData, goToTimer, user }) => {
     if ((history[dateStr] || 0) > 0) { streak++; d.setDate(d.getDate() - 1); } else break;
   }
 
-  // Restored Weekly Data Logic
+  // Fixed Weekly Graph (Sun - Sat)
   const getWeeklyData = () => {
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const now = new Date();
+    const currentDay = now.getDay(); // 0-6
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - currentDay); // Go back to Sunday
+
     const chartData = [];
-    for (let i = 6; i >= 0; i--) {
-        const d = new Date(); d.setDate(d.getDate() - i);
+    for (let i = 0; i < 7; i++) {
+        const d = new Date(startOfWeek);
+        d.setDate(startOfWeek.getDate() + i);
         const dateStr = d.toISOString().split('T')[0];
-        const mins = history[dateStr] || 0;
-        chartData.push({ name: days[d.getDay()], hours: parseFloat((mins / 60).toFixed(1)) });
+        chartData.push({ 
+            name: d.toLocaleDateString('en-US', { weekday: 'short' }), // Sun, Mon
+            hours: parseFloat(((history[dateStr] || 0) / 60).toFixed(1)) 
+        });
     }
     return chartData;
   };
@@ -522,9 +555,8 @@ const Dashboard = ({ data, setData, goToTimer, user }) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Restored Weekly Graph */}
         <GlassCard className="min-h-[300px] flex flex-col">
-          <h3 className="text-lg font-bold text-white mb-6">Last 7 Days</h3>
+          <h3 className="text-lg font-bold text-white mb-6">This Week's Progress (Sun - Sat)</h3>
           <div className="flex-1 w-full min-h-[200px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={getWeeklyData()}>
@@ -589,13 +621,8 @@ export default function App() {
   const saveSession = (subject, seconds) => {
     const mins = parseFloat((seconds/60).toFixed(2));
     const today = new Date().toISOString().split('T')[0];
-    
-    // Update basic history
     const newHistory = { ...data.history, [today]: (data.history?.[today] || 0) + mins };
-    
-    // Update subject stats
     const newSubjects = { ...data.subjects, [subject]: { ...data.subjects[subject], timeSpent: data.subjects[subject].timeSpent + seconds } };
-
     setData(prev => ({
       ...prev,
       subjects: newSubjects,
