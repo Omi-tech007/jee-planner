@@ -275,6 +275,7 @@ const LoginScreen = () => {
     </div>
   );
 };
+ const handleLogout = async () => { await signOut(auth); setData(INITIAL_DATA); };
 // This part goes inside your "App" function
 if (!user) {
   return <LoginScreen />;
@@ -306,7 +307,6 @@ if (!user.emailVerified) {
     </div>
   );
 }
-
 // If they ARE verified, it will continue to the Dashboard automatically
 
 // --- FOCUS TIMER (Unchanged but included) ---
