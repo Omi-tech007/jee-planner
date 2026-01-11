@@ -297,10 +297,9 @@ const SettingsModal = ({ isOpen, onClose, data, setData, user }) => {
   );
 };
 // --- PROFILE DROPDOWN ---
-// --- UPDATED PROFILE DROPDOWN ---
-const ProfileDropdown = ({ user, onLogout, onChangeExam, data, setData }) => {
+// --- UPDATED PROFILE DROPDOWN (NAVIGATES TO PAGE) ---
+const ProfileDropdown = ({ user, onLogout, onChangeExam, data, setView }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   const dropdownRef = useRef(null);
 
   useEffect(() => {
@@ -312,59 +311,51 @@ const ProfileDropdown = ({ user, onLogout, onChangeExam, data, setData }) => {
   }, []);
 
   return (
-    <>
-      <SettingsModal 
-        isOpen={showSettings} 
-        onClose={() => setShowSettings(false)} 
-        data={data} 
-        setData={setData} 
-        user={user} 
-      />
+    <div className="relative" ref={dropdownRef}>
+      <button onClick={() => setIsOpen(!isOpen)} className="flex items-center gap-2 p-1 rounded-full hover:bg-white/5 transition-colors border border-transparent hover:border-white/10">
+        <div className="hidden md:block text-right mr-1">
+          <p className="text-xs font-bold text-white leading-none">
+             {data.settings?.username || user.displayName?.split(' ')[0] || "User"}
+          </p>
+        </div>
+        {user.photoURL ? (
+          <img src={user.photoURL} alt="Profile" className="w-8 h-8 rounded-full border-2 border-violet-500/50" />
+        ) : (
+          <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-white font-bold border-2 border-violet-400 text-xs uppercase">{user.email?.[0] || "U"}</div>
+        )}
+      </button>
 
-      <div className="relative" ref={dropdownRef}>
-        <button onClick={() => setIsOpen(!isOpen)} className="flex items-center gap-2 p-1 rounded-full hover:bg-white/5 transition-colors border border-transparent hover:border-white/10">
-          <div className="hidden md:block text-right mr-1">
-            <p className="text-xs font-bold text-white leading-none">
-                {data.settings?.username || user.displayName?.split(' ')[0] || "User"}
-            </p>
-          </div>
-          {user.photoURL ? (
-            <img src={user.photoURL} alt="Profile" className="w-8 h-8 rounded-full border-2 border-violet-500/50" />
-          ) : (
-            <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-white font-bold border-2 border-violet-400 text-xs uppercase">{user.email?.[0] || "U"}</div>
-          )}
-        </button>
-
-        <AnimatePresence>
-          {isOpen && (
-            <motion.div 
-              initial={{ opacity: 0, y: 10, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              className="absolute right-0 mt-2 w-60 bg-[#18181b] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden"
-            >
-              <div className="p-3 border-b border-white/5 bg-white/5">
-                 <p className="text-white font-bold text-sm">
-                    {data.settings?.username || user.displayName || "User"}
-                 </p>
-                 <p className="text-gray-400 text-sm mt-0.5 truncate">{user.email}</p>
-              </div>
-              <div className="p-1 space-y-1">
-                <button onClick={() => { setIsOpen(false); setShowSettings(true); }} className="w-full flex items-center gap-3 px-3 py-2 text-gray-300 hover:bg-white/10 rounded-lg transition-colors text-xs font-bold">
-                  <Settings size={14} /> Settings
-                </button>
-                <button onClick={() => { setIsOpen(false); onChangeExam(); }} className="w-full flex items-center gap-3 px-3 py-2 text-gray-300 hover:bg-white/10 rounded-lg transition-colors text-xs font-bold">
-                  <Edit3 size={14} /> Change Exams
-                </button>
-                <button onClick={onLogout} className="w-full flex items-center gap-3 px-3 py-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors text-xs font-bold">
-                  <LogOut size={14} /> Log Out
-                </button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-    </>
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div 
+            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+            className="absolute right-0 mt-2 w-60 bg-[#18181b] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden"
+          >
+            <div className="p-3 border-b border-white/5 bg-white/5">
+                <p className="text-white font-bold text-sm">
+                   {data.settings?.username || user.displayName || "User"}
+                </p>
+                <p className="text-[10px] text-gray-400 mt-0.5 truncate">{user.email}</p>
+            </div>
+            <div className="p-1 space-y-1">
+              {/* THIS BUTTON NOW CHANGES THE PAGE VIEW */}
+              <button onClick={() => { setIsOpen(false); setView('settings'); }} className="w-full flex items-center gap-3 px-3 py-2 text-gray-300 hover:bg-white/10 rounded-lg transition-colors text-xs font-bold">
+                <Settings size={14} /> Settings
+              </button>
+              
+              <button onClick={() => { setIsOpen(false); onChangeExam(); }} className="w-full flex items-center gap-3 px-3 py-2 text-gray-300 hover:bg-white/10 rounded-lg transition-colors text-xs font-bold">
+                <Edit3 size={14} /> Change Exams
+              </button>
+              <button onClick={onLogout} className="w-full flex items-center gap-3 px-3 py-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors text-xs font-bold">
+                <LogOut size={14} /> Log Out
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 };
 // --- EXAM SELECTION SCREEN ---
@@ -917,7 +908,8 @@ export default function App() {
         {view === 'timer' && <FocusTimer data={data} setData={setData} onSaveSession={saveSession} />} 
         {view === 'syllabus' && <Syllabus data={data} setData={setData} />}
         {view === 'mocks' && <MockTestTracker data={data} setData={setData} />}
-        {view === 'kpp' && <PhysicsKPP data={data} setData={setData} />} 
+        {view === 'kpp' && <PhysicsKPP data={data} setData={setData} />} {view === 'settings' && <SettingsView data={data} setData={setData} user={user} onBack={() => setView('dashboard')} />}
+        {view === 'settings' && <SettingsView data={data} setData={setData} user={user} onBack={() => setView('dashboard')} />}
       </main>
 
       <div className="md:hidden fixed bottom-0 left-0 w-full bg-[#09090b]/95 backdrop-blur-md border-t border-white/10 p-4 flex justify-around z-50">
