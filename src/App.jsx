@@ -5,7 +5,7 @@ import {
   Plus, Trash2, FileText, TrendingUp, LogOut,
   Timer as TimerIcon, StopCircle, Target, User,
   Settings, Image as ImageIcon, ExternalLink, Maximize, Minimize,
-  PieChart as PieChartIcon, Upload
+  PieChart as PieChartIcon, Upload, Bell
 } from 'lucide-react';
 import { 
   BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, 
@@ -20,7 +20,7 @@ import { doc, setDoc, getDoc } from "firebase/firestore";
 import { auth, googleProvider, db } from "./firebase"; 
 
 /**
- * JEEPLANET PRO - v20.0 (Fixed Axis: Full Week/Month/Year + Zero Filling)
+ * JEEPLANET PRO - v21.0 (Upcoming Test Notifications)
  */
 
 // --- CONSTANTS ---
@@ -135,7 +135,6 @@ const FocusTimer = ({ data, setData, onSaveSession }) => {
   const videoRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  // File Upload
   const handleFileUpload = (e) => {
       const file = e.target.files[0];
       if(file) {
@@ -145,7 +144,6 @@ const FocusTimer = ({ data, setData, onSaveSession }) => {
       }
   };
 
-  // Fullscreen
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) containerRef.current.requestFullscreen().then(() => setIsFullscreen(true)).catch(err => alert("Fullscreen blocked"));
     else document.exitFullscreen().then(() => setIsFullscreen(false));
@@ -156,7 +154,6 @@ const FocusTimer = ({ data, setData, onSaveSession }) => {
       return () => document.removeEventListener("fullscreenchange", handleFsChange);
   }, []);
 
-  // PiP Sync
   useEffect(() => {
       const video = videoRef.current;
       if (!video) return;
@@ -170,7 +167,6 @@ const FocusTimer = ({ data, setData, onSaveSession }) => {
       };
   }, []);
 
-  // Timer
   useEffect(() => {
     let interval = null;
     if (isActive) {
@@ -241,7 +237,6 @@ const FocusTimer = ({ data, setData, onSaveSession }) => {
              <div className="flex flex-col flex-1">
                 <div className="flex justify-between text-[10px] uppercase font-bold text-gray-400 mb-1">
                     <span>Daily Goal</span>
-                    {/* PRECISE GOAL - NO ROUNDING */}
                     <span>{Math.floor(todayMins/60)}h {Math.round(todayMins%60)}m / {data.dailyGoal}h 0m</span>
                 </div>
                 <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden"><div className="h-full bg-violet-500 transition-all duration-500" style={{width: `${percent}%`}}></div></div>
@@ -307,7 +302,7 @@ const FocusTimer = ({ data, setData, onSaveSession }) => {
   );
 };
 
-// --- 3. PHYSICS KPP --- (Unchanged)
+// --- 3. PHYSICS KPP ---
 const PhysicsKPP = ({ data, setData }) => {
     const [newKPP, setNewKPP] = useState({ name: '', chapter: '', attempted: false, corrected: false, myScore: 0, totalScore: 0 });
     const physicsChapters = data.subjects['Physics']?.chapters || [];
@@ -318,7 +313,7 @@ const PhysicsKPP = ({ data, setData }) => {
     return (<div className="space-y-6 max-w-5xl mx-auto"><h1 className="text-3xl font-bold text-white mb-2">Physics KPP Tracker</h1><GlassCard className="border-t-4 border-t-purple-500"><div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4"><input type="text" placeholder="KPP Name (e.g. Rotational-01)" className="bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none" value={newKPP.name} onChange={e => setNewKPP({...newKPP, name: e.target.value})} /><select className="bg-[#18181b] border border-white/10 rounded-lg p-3 text-white outline-none" value={newKPP.chapter} onChange={e => setNewKPP({...newKPP, chapter: e.target.value})}><option value="">Select Physics Chapter</option>{physicsChapters.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select></div><div className="flex flex-wrap gap-4 items-center"><div className="flex items-center gap-2 text-gray-400"><input type="checkbox" className="w-5 h-5 accent-purple-500" checked={newKPP.attempted} onChange={e => setNewKPP({...newKPP, attempted: e.target.checked})} /> Attempted</div><div className="flex items-center gap-2 text-gray-400"><input type="checkbox" className="w-5 h-5 accent-green-500" checked={newKPP.corrected} onChange={e => setNewKPP({...newKPP, corrected: e.target.checked})} /> Corrected</div><div className="flex items-center gap-2"><input type="number" placeholder="My Score" className="w-24 bg-white/5 border border-white/10 rounded-lg p-2 text-white" value={newKPP.myScore} onChange={e => setNewKPP({...newKPP, myScore: parseFloat(e.target.value)})} /><span className="text-gray-500">/</span><input type="number" placeholder="Total" className="w-24 bg-white/5 border border-white/10 rounded-lg p-2 text-white" value={newKPP.totalScore} onChange={e => setNewKPP({...newKPP, totalScore: parseFloat(e.target.value)})} /></div><button onClick={addKPP} className="ml-auto px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold">Add KPP</button></div></GlassCard>{graphData.length > 0 && (<GlassCard className="h-[300px]"><ResponsiveContainer width="100%" height="90%"><BarChart data={graphData}><CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} /><XAxis dataKey="name" stroke="#9ca3af" fontSize={10} tickLine={false} axisLine={false} /><YAxis stroke="#9ca3af" fontSize={10} tickLine={false} axisLine={false} /><RechartsTooltip cursor={{fill: 'rgba(255,255,255,0.05)'}} contentStyle={{backgroundColor: '#18181b', borderColor: '#27272a', color: '#fff'}} /><Bar dataKey="percentage" fill="#8b5cf6" radius={[4,4,0,0]} name="Score %" /></BarChart></ResponsiveContainer></GlassCard>)}<div className="grid gap-3">{(data.kppList || []).slice().reverse().map(kpp => (<div key={kpp.id} className="bg-[#121212] border border-white/10 p-4 rounded-xl flex flex-col md:flex-row items-center justify-between gap-4"><div className="flex-1"><div className="flex items-center gap-3"><span className="font-bold text-white text-lg">{kpp.name}</span><span className="text-xs text-gray-500 px-2 py-1 bg-white/5 rounded">{kpp.chapter}</span></div><div className="flex gap-4 mt-2 text-sm"><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={kpp.attempted} onChange={(e) => updateKPP(kpp.id, 'attempted', e.target.checked)} className="accent-purple-500"/> <span className={kpp.attempted ? "text-purple-400" : "text-gray-500"}>Attempted</span></label><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={kpp.corrected} onChange={(e) => updateKPP(kpp.id, 'corrected', e.target.checked)} className="accent-green-500"/> <span className={kpp.corrected ? "text-green-400" : "text-gray-500"}>Corrected</span></label></div></div><div className="flex items-center gap-4"><div className="text-right"><div className="text-white font-bold text-xl">{kpp.myScore} <span className="text-gray-500 text-sm">/ {kpp.totalScore}</span></div><div className="text-xs text-gray-500">{kpp.totalScore > 0 ? Math.round((kpp.myScore/kpp.totalScore)*100) : 0}%</div></div><button onClick={() => deleteKPP(kpp.id)} className="text-gray-600 hover:text-red-500"><Trash2 size={18} /></button></div></div>))}</div></div>);
 };
 
-// --- 4. SYLLABUS & MOCKS (Unchanged) ---
+// --- 4. SYLLABUS & MOCKS (Updated with Notifications) ---
 const Syllabus = ({ data, setData }) => {
   const [selectedSubject, setSelectedSubject] = useState(SUBJECTS[0]);
   const [gradeView, setGradeView] = useState('11');
@@ -360,17 +355,80 @@ const MockTestTracker = ({ data, setData }) => {
   const [isAdding, setIsAdding] = useState(false);
   const [filterType, setFilterType] = useState('All'); 
   const [testType, setTestType] = useState('Mains');
-  const [newTest, setNewTest] = useState({ name: '', date: '', p: '', c: '', m: '', maxMarks: 300 });
-  const addTest = () => { if (!newTest.name || !newTest.date) return; const p = parseFloat(newTest.p) || 0; const c = parseFloat(newTest.c) || 0; const m = parseFloat(newTest.m) || 0; const total = p + c + m; const max = testType === 'Mains' ? 300 : (parseInt(newTest.maxMarks) || 360); const testEntry = { id: Date.now(), type: testType, name: newTest.name, date: newTest.date, p, c, m, total, maxMarks: max }; setData(prev => ({ ...prev, mockTests: [...(prev.mockTests || []), testEntry] })); setIsAdding(false); setNewTest({ name: '', date: '', p: '', c: '', m: '', maxMarks: 300 }); };
+  const [newTest, setNewTest] = useState({ name: '', date: '', p: '', c: '', m: '', maxMarks: 300, reminder: false });
+
+  // NOTIFICATION PERMISSION REQUEST
+  const requestNotificationPermission = async () => {
+      if (!("Notification" in window)) {
+          alert("This browser does not support desktop notification");
+          return;
+      }
+      if (Notification.permission !== "granted") {
+          await Notification.requestPermission();
+      }
+  };
+
+  const addTest = () => {
+    if (!newTest.name || !newTest.date) return;
+    const p = parseFloat(newTest.p) || 0;
+    const c = parseFloat(newTest.c) || 0;
+    const m = parseFloat(newTest.m) || 0;
+    const total = p + c + m;
+    const max = testType === 'Mains' ? 300 : (parseInt(newTest.maxMarks) || 360);
+    const testEntry = { 
+        id: Date.now(), 
+        type: testType, 
+        name: newTest.name, 
+        date: newTest.date, 
+        p, c, m, 
+        total, 
+        maxMarks: max,
+        reminder: newTest.reminder // SAVE REMINDER PREFERENCE
+    };
+
+    if(newTest.reminder) requestNotificationPermission();
+
+    setData(prev => ({ ...prev, mockTests: [...(prev.mockTests || []), testEntry] }));
+    setIsAdding(false);
+    setNewTest({ name: '', date: '', p: '', c: '', m: '', maxMarks: 300, reminder: false });
+  };
+
   const deleteTest = (id) => { if(window.confirm("Delete record?")) setData(prev => ({ ...prev, mockTests: prev.mockTests.filter(t => t.id !== id) })); };
   const filteredTests = (data.mockTests || []).filter(t => { if (filterType === 'All') return true; return t.type === filterType || (!t.type && filterType === 'Mains'); });
   const sortedTests = [...filteredTests].sort((a,b) => new Date(a.date) - new Date(b.date));
+
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
       <div className="flex justify-between items-center gap-4"><div><h1 className="text-3xl font-bold text-white mb-2">Mock Test Analysis</h1><p className="text-gray-400">Scores by Subject (Stacked)</p></div><div className="flex gap-2">{['All', 'Mains', 'Advanced'].map(t => (<button key={t} onClick={() => setFilterType(t)} className={`px-4 py-2 rounded-lg text-sm font-bold border transition ${filterType===t ? 'bg-violet-600 text-white border-violet-600' : 'border-white/10 text-gray-400'}`}>{t}</button>))}</div><button onClick={() => setIsAdding(!isAdding)} className="px-6 py-3 bg-violet-600 text-white rounded-xl font-bold flex items-center gap-2">{isAdding ? <X size={18}/> : <Plus size={18}/>} {isAdding ? 'Cancel' : 'Log Test'}</button></div>
-      {isAdding && (<GlassCard className="border-t-4 border-t-violet-500"><div className="flex gap-4 mb-6">{['Mains', 'Advanced'].map(t => (<label key={t} className="flex items-center gap-2 cursor-pointer"><input type="radio" className="accent-violet-500" checked={testType === t} onChange={() => setTestType(t)} /><span className={testType === t ? 'text-white font-bold' : 'text-gray-400'}>JEE {t}</span></label>))}</div><div className="grid grid-cols-2 md:grid-cols-6 gap-4 items-end"><div className="col-span-2 space-y-2"><label className="text-xs text-gray-400 font-bold uppercase">Name</label><input type="text" className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none" value={newTest.name} onChange={e => setNewTest({...newTest, name: e.target.value})} /></div><div className="space-y-2"><label className="text-xs text-gray-400 font-bold uppercase">Date</label><input type="date" className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none" value={newTest.date} onChange={e => setNewTest({...newTest, date: e.target.value})} /></div><div className="space-y-2"><label className="text-xs text-violet-400 font-bold uppercase">Physics</label><input type="number" className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none" value={newTest.p} onChange={e => setNewTest({...newTest, p: e.target.value})} /></div><div className="space-y-2"><label className="text-xs text-green-400 font-bold uppercase">Chem</label><input type="number" className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none" value={newTest.c} onChange={e => setNewTest({...newTest, c: e.target.value})} /></div><div className="space-y-2"><label className="text-xs text-blue-400 font-bold uppercase">Maths</label><input type="number" className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none" value={newTest.m} onChange={e => setNewTest({...newTest, m: e.target.value})} /></div></div>{testType === 'Advanced' && <div className="mt-4"><input type="number" placeholder="Total Max Marks (e.g. 360)" className="bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none" value={newTest.maxMarks} onChange={e => setNewTest({...newTest, maxMarks: e.target.value})} /></div>}<button onClick={addTest} className="mt-6 w-full py-3 font-bold rounded-lg bg-violet-600 text-white hover:bg-violet-700">Save Score</button></GlassCard>)}
+      
+      {isAdding && (
+          <GlassCard className="border-t-4 border-t-violet-500">
+              {/* Type Selection */}
+              <div className="flex gap-4 mb-6">{['Mains', 'Advanced'].map(t => (<label key={t} className="flex items-center gap-2 cursor-pointer"><input type="radio" className="accent-violet-500" checked={testType === t} onChange={() => setTestType(t)} /><span className={testType === t ? 'text-white font-bold' : 'text-gray-400'}>JEE {t}</span></label>))}</div>
+              
+              {/* Inputs */}
+              <div className="grid grid-cols-2 md:grid-cols-6 gap-4 items-end">
+                  <div className="col-span-2 space-y-2"><label className="text-xs text-gray-400 font-bold uppercase">Name</label><input type="text" className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none" value={newTest.name} onChange={e => setNewTest({...newTest, name: e.target.value})} /></div>
+                  <div className="space-y-2"><label className="text-xs text-gray-400 font-bold uppercase">Date</label><input type="date" className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none" value={newTest.date} onChange={e => setNewTest({...newTest, date: e.target.value})} /></div>
+                  <div className="space-y-2"><label className="text-xs text-violet-400 font-bold uppercase">Physics</label><input type="number" className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none" value={newTest.p} onChange={e => setNewTest({...newTest, p: e.target.value})} /></div>
+                  <div className="space-y-2"><label className="text-xs text-green-400 font-bold uppercase">Chem</label><input type="number" className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none" value={newTest.c} onChange={e => setNewTest({...newTest, c: e.target.value})} /></div>
+                  <div className="space-y-2"><label className="text-xs text-blue-400 font-bold uppercase">Maths</label><input type="number" className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none" value={newTest.m} onChange={e => setNewTest({...newTest, m: e.target.value})} /></div>
+              </div>
+
+              {testType === 'Advanced' && <div className="mt-4"><input type="number" placeholder="Total Max Marks (e.g. 360)" className="bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none" value={newTest.maxMarks} onChange={e => setNewTest({...newTest, maxMarks: e.target.value})} /></div>}
+              
+              {/* REMINDER TOGGLE */}
+              <div className="mt-4 flex items-center gap-2">
+                  <input type="checkbox" id="remindMe" className="accent-violet-500 w-5 h-5" checked={newTest.reminder} onChange={e => setNewTest({...newTest, reminder: e.target.checked})} />
+                  <label htmlFor="remindMe" className="text-gray-300 text-sm font-bold flex items-center gap-2"><Bell size={16} /> Remind me 1 day before & on the day</label>
+              </div>
+
+              <button onClick={addTest} className="mt-6 w-full py-3 font-bold rounded-lg bg-violet-600 text-white hover:bg-violet-700">Save Score & Set Reminder</button>
+          </GlassCard>
+      )}
+
       {sortedTests.length > 0 ? (<GlassCard className="h-[400px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={sortedTests} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} /><XAxis dataKey="name" stroke="#9ca3af" fontSize={12} tickLine={false} axisLine={false} /><YAxis stroke="#9ca3af" fontSize={12} tickLine={false} axisLine={false} /><RechartsTooltip cursor={{fill: 'rgba(255,255,255,0.05)'}} contentStyle={{backgroundColor: '#18181b', borderColor: '#27272a', color: '#fff'}} /><Legend iconType="circle" /><Bar dataKey="p" name="Physics" stackId="a" fill="#8b5cf6" barSize={40} radius={[0,0,4,4]} /><Bar dataKey="c" name="Chemistry" stackId="a" fill="#10b981" barSize={40} /><Bar dataKey="m" name="Maths" stackId="a" fill="#3b82f6" barSize={40} radius={[4,4,0,0]} /></BarChart></ResponsiveContainer></GlassCard>) : <div className="text-center py-10 text-gray-500">No tests logged.</div>}
-      <div className="grid gap-3">{sortedTests.slice().reverse().map(test => (<div key={test.id} className="group bg-[#121212] border border-white/10 p-4 rounded-xl flex items-center justify-between hover:border-white/20 transition"><div className="flex gap-4 items-center"><div className={`w-1 h-12 rounded-full ${test.type === 'Advanced' ? 'bg-orange-500' : 'bg-violet-500'}`}></div><div><div className="flex items-center gap-3"><h3 className="font-bold text-white">{test.name}</h3><span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${test.type === 'Advanced' ? 'bg-orange-500/20 text-orange-400' : 'bg-violet-500/20 text-violet-400'}`}>{test.type || 'Mains'}</span></div><div className="text-xs text-gray-500 mt-1">{test.date}</div><div className="flex gap-4 mt-2 text-sm"><span className="text-violet-400">P: {test.p}</span><span className="text-green-400">C: {test.c}</span><span className="text-blue-400">M: {test.m}</span></div></div></div><div className="flex items-center gap-6"><div className="text-right"><div className="text-2xl font-bold text-white">{test.total} <span className="text-sm text-gray-500 font-normal">/ {test.maxMarks || 300}</span></div><div className="text-xs text-gray-500 uppercase">{Math.round((test.total / (test.maxMarks || 300)) * 100)}%</div></div><button onClick={() => deleteTest(test.id)} className="p-2 text-gray-600 hover:text-red-500 transition" title="Delete Test Record"><Trash2 size={20} /></button></div></div>))}</div>
+      <div className="grid gap-3">{sortedTests.slice().reverse().map(test => (<div key={test.id} className="group bg-[#121212] border border-white/10 p-4 rounded-xl flex items-center justify-between hover:border-white/20 transition"><div className="flex gap-4 items-center"><div className={`w-1 h-12 rounded-full ${test.type === 'Advanced' ? 'bg-orange-500' : 'bg-violet-500'}`}></div><div><div className="flex items-center gap-3"><h3 className="font-bold text-white">{test.name}</h3><span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${test.type === 'Advanced' ? 'bg-orange-500/20 text-orange-400' : 'bg-violet-500/20 text-violet-400'}`}>{test.type || 'Mains'}</span>{test.reminder && <Bell size={12} className="text-violet-400" />}</div><div className="text-xs text-gray-500 mt-1">{test.date}</div><div className="flex gap-4 mt-2 text-sm"><span className="text-violet-400">P: {test.p}</span><span className="text-green-400">C: {test.c}</span><span className="text-blue-400">M: {test.m}</span></div></div></div><div className="flex items-center gap-6"><div className="text-right"><div className="text-2xl font-bold text-white">{test.total} <span className="text-sm text-gray-500 font-normal">/ {test.maxMarks || 300}</span></div><div className="text-xs text-gray-500 uppercase">{Math.round((test.total / (test.maxMarks || 300)) * 100)}%</div></div><button onClick={() => deleteTest(test.id)} className="p-2 text-gray-600 hover:text-red-500 transition" title="Delete Test Record"><Trash2 size={20} /></button></div></div>))}</div>
     </div>
   );
 };
@@ -594,6 +652,32 @@ export default function App() {
   const [data, setData] = useState(INITIAL_DATA);
   const [view, setView] = useState('dashboard');
   const [loading, setLoading] = useState(true);
+
+  // --- CHECK FOR NOTIFICATIONS ON APP LOAD ---
+  useEffect(() => {
+      const checkReminders = () => {
+          if (!data.mockTests || data.mockTests.length === 0) return;
+          
+          const todayStr = new Date().toISOString().split('T')[0];
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+          data.mockTests.forEach(test => {
+              if (test.reminder) {
+                  if (test.date === tomorrowStr) {
+                      new Notification("Upcoming Test Reminder", { body: `Tomorrow: ${test.name} (${test.type})` });
+                  } else if (test.date === todayStr) {
+                      new Notification("Test Day!", { body: `Good luck for ${test.name} today!` });
+                  }
+              }
+          });
+      };
+
+      if (Notification.permission === 'granted') {
+          checkReminders();
+      }
+  }, [data.mockTests]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
