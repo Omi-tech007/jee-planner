@@ -29,7 +29,7 @@ import { doc, setDoc, getDoc } from "firebase/firestore";
 import { auth, googleProvider, db } from "./firebase"; 
 
 /**
- * PREPPILOT - v27.0 (Smart Syllabus, Task Subjects, Heatmap Fix, Countdown Grid)
+ * PREPPILOT - v28.0 (Integrated Settings Page)
  */
 
 // --- CONSTANTS & CONFIG ---
@@ -50,20 +50,6 @@ const EXAM_CONFIG = {
   "MHT-CET (PCB) 2027": { date: "2027-04-10", marks: 200, type: "Bio" },
 };
 
-const INITIAL_DATA = {
-  dailyGoal: 10,
-  tasks: [],
-  subjects: ALL_SUBJECTS.reduce((acc, sub) => ({ ...acc, [sub]: { chapters: [], timeSpent: 0 } }), {}),
-  mockTests: [],
-  kppList: [],
-  history: {}, 
-  xp: 0, 
-  darkMode: true,
-  bgImage: "",
-  selectedExams: [], 
-};
-// ... existing constants ...
-
 const THEME_COLORS = [
   { name: 'Teal', class: 'teal', hex: '#14b8a6' },
   { name: 'Rose', class: 'rose', hex: '#f43f5e' },
@@ -73,7 +59,19 @@ const THEME_COLORS = [
   { name: 'Slate', class: 'slate', hex: '#64748b' },
 ];
 
-// ... code continues ...
+const INITIAL_DATA = {
+  dailyGoal: 10,
+  tasks: [],
+  subjects: ALL_SUBJECTS.reduce((acc, sub) => ({ ...acc, [sub]: { chapters: [], timeSpent: 0 } }), {}),
+  mockTests: [],
+  kppList: [],
+  history: {}, 
+  xp: 0, 
+  settings: { theme: 'Violet', mode: 'Dark', username: '' }, // Added settings
+  bgImage: "",
+  selectedExams: [], 
+};
+
 // --- HELPER: GET USER SUBJECTS BASED ON EXAM ---
 const getUserSubjects = (selectedExams = []) => {
   let showMath = false;
@@ -109,14 +107,9 @@ const StudyHeatmap = ({ history }) => {
   const generateYearData = () => {
     const days = [];
     const today = new Date();
-    // End date is today
-    // Start date is 52 weeks ago (approx 1 year), aligned to start on a Sunday to keep grid clean
     const end = today;
     const start = new Date(end);
     start.setDate(end.getDate() - 364); 
-    
-    // Adjust start to previous Sunday if needed for perfect alignment, 
-    // but typically just rendering 365 days in grid-auto-flow: column works if height is fixed to 7
     
     for (let i = 0; i < 365; i++) {
       const d = new Date(start);
@@ -140,7 +133,6 @@ const StudyHeatmap = ({ history }) => {
   return (
     <div className="w-full overflow-x-auto pb-2 no-scrollbar">
       <div className="flex flex-col gap-1 min-w-[600px]">
-         {/* Grid Container: 7 Rows (Sun-Sat), Auto Columns */}
          <div className="grid grid-rows-7 grid-flow-col gap-1 h-[100px]">
             {data.map((day) => (
               <div 
@@ -156,7 +148,6 @@ const StudyHeatmap = ({ history }) => {
               />
             ))}
          </div>
-         {/* Simple Month Labels (Approximate) */}
          <div className="flex justify-between text-[10px] text-gray-500 font-bold px-2 uppercase tracking-widest">
              <span>Jan</span><span>Mar</span><span>May</span><span>Jul</span><span>Sep</span><span>Nov</span><span>Dec</span>
          </div>
@@ -164,10 +155,9 @@ const StudyHeatmap = ({ history }) => {
     </div>
   );
 };
-// --- SETTINGS MODAL COMPONENT ---
-const SettingsModal = ({ isOpen, onClose, data, setData, user }) => {
-  if (!isOpen) return null;
 
+// --- SETTINGS VIEW COMPONENT (Full Page) ---
+const SettingsView = ({ data, setData, user, onBack }) => {
   const currentTheme = data.settings?.theme || 'Violet';
   const currentMode = data.settings?.mode || 'Dark';
   const username = data.settings?.username || user.displayName?.split(' ')[0] || "User";
@@ -175,128 +165,99 @@ const SettingsModal = ({ isOpen, onClose, data, setData, user }) => {
   const handleUpdate = (field, value) => {
     setData(prev => ({
       ...prev,
-      settings: { ...prev.settings, [field]: value }
+      settings: { ...prev.settings || {}, [field]: value }
     }));
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="w-full max-w-4xl bg-[#121212] border border-white/10 rounded-3xl shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto custom-scrollbar"
-      >
-        <div className="p-6 border-b border-white/10 flex justify-between items-start">
-          <div>
-            <h2 className="text-2xl font-bold text-white">Settings</h2>
-            <p className="text-gray-400 text-sm mt-1">Manage your account, appearance, and application settings.</p>
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition">
-            <X size={24} />
-          </button>
+    <div className="space-y-6 max-w-5xl mx-auto pb-10">
+      {/* Page Header */}
+      <div className="flex items-center gap-4 mb-6">
+        <button onClick={onBack} className="p-2 bg-white/5 rounded-full hover:bg-white/10 transition">
+          <ChevronRight className="rotate-180 text-white" size={24} />
+        </button>
+        <div>
+          <h1 className="text-3xl font-bold text-white">Settings</h1>
+          <p className="text-gray-400">Manage your account and preferences</p>
         </div>
+      </div>
 
-        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
-          {/* Left Column: Profile */}
-          <div className="space-y-6">
-            <div className="border border-white/10 rounded-2xl p-6 bg-white/5">
-              <h3 className="flex items-center gap-2 text-lg font-bold text-white mb-6">
-                <User size={20} /> Profile
-              </h3>
-              
-              <div className="flex items-center gap-4 mb-8">
-                <div className={`w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold text-white uppercase border-2 border-${currentTheme === 'Violet' ? 'violet' : currentTheme.toLowerCase()}-500 bg-gradient-to-br from-gray-800 to-black`}>
-                  {user.photoURL ? <img src={user.photoURL} alt="Profile" className="w-full h-full rounded-full object-cover" /> : username[0]}
-                </div>
-                <div>
-                  <h4 className="text-white font-bold text-lg">{user.displayName || "Pilot"}</h4>
-                  <p className="text-gray-400 text-sm">{user.email}</p>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="text-xs font-bold text-gray-500 uppercase mb-1.5 block">Username</label>
-                  <div className="flex gap-2">
-                    <input 
-                      type="text" 
-                      value={username} 
-                      onChange={(e) => handleUpdate('username', e.target.value)}
-                      className="flex-1 bg-black/20 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm outline-none focus:border-violet-500 transition"
-                    />
-                    <button className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-xl border border-white/5 transition flex items-center gap-2">
-                      <Edit3 size={14} /> Edit
-                    </button>
-                  </div>
-                  <p className="text-[10px] text-gray-500 mt-2">This is your unique username within the app.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Column: Appearance */}
-          <div className="space-y-6">
-            <div className="border border-white/10 rounded-2xl p-6 bg-white/5 h-full">
-              <h3 className="flex items-center gap-2 text-lg font-bold text-white mb-2">
-                <ImageIcon size={20} /> Appearance
-              </h3>
-              <p className="text-gray-400 text-sm mb-6">Customize the look and feel of the app.</p>
-
-              {/* Color Theme */}
-              <div className="mb-8">
-                <label className="text-xs font-bold text-gray-500 uppercase mb-3 block">Color Theme</label>
-                <div className="grid grid-cols-2 gap-3">
-                  {THEME_COLORS.map((theme) => {
-                    const isActive = currentTheme === theme.name;
-                    return (
-                      <button 
-                        key={theme.name}
-                        onClick={() => handleUpdate('theme', theme.name)}
-                        className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${isActive ? 'bg-white/10 border-violet-500 ring-1 ring-violet-500/50' : 'bg-transparent border-white/10 hover:border-white/30'}`}
-                      >
-                        <div className="w-4 h-4 rounded-full shadow-sm" style={{ backgroundColor: theme.hex }}></div>
-                        <span className={`text-sm font-bold ${isActive ? 'text-white' : 'text-gray-400'}`}>{theme.name}</span>
-                        {isActive && <CheckCircle size={14} className="ml-auto text-violet-500" />}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* Mode Toggle */}
-              <div>
-                <label className="text-xs font-bold text-gray-500 uppercase mb-3 block">Mode</label>
-                <div className="flex items-center justify-between p-4 rounded-xl border border-white/10 bg-black/20">
-                  <span className="text-sm font-bold text-white">Toggle light or dark mode</span>
-                  <button 
-                    onClick={() => handleUpdate('mode', currentMode === 'Dark' ? 'Light' : 'Dark')}
-                    className="w-12 h-6 rounded-full bg-white/10 border border-white/10 relative transition-colors hover:bg-white/20"
-                  >
-                    <motion.div 
-                      animate={{ x: currentMode === 'Dark' ? 26 : 2 }}
-                      className="absolute top-1 left-0 w-4 h-4 rounded-full bg-white shadow-sm flex items-center justify-center"
-                    >
-                      {currentMode === 'Dark' ? <Zap size={8} className="text-black" /> : <div className="w-1.5 h-1.5 rounded-full bg-black/20" />}
-                    </motion.div>
-                  </button>
-                </div>
-              </div>
-
-            </div>
-          </div>
-        </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
-        <div className="p-6 border-t border-white/10 bg-black/20 flex justify-end gap-3">
-          <button onClick={onClose} className="px-6 py-2.5 text-sm font-bold text-gray-400 hover:text-white transition">Cancel</button>
-          <button onClick={onClose} className="px-8 py-2.5 bg-violet-600 hover:bg-violet-700 text-white text-sm font-bold rounded-xl shadow-lg shadow-violet-600/20 transition transform active:scale-95">
-            Save Changes
-          </button>
-        </div>
-      </motion.div>
+        {/* Profile Card */}
+        <GlassCard>
+          <h3 className="flex items-center gap-2 text-xl font-bold text-white mb-6">
+            <User size={24} className="text-violet-500" /> Profile Details
+          </h3>
+          
+          <div className="flex items-center gap-4 mb-8 p-4 bg-black/20 rounded-xl border border-white/5">
+            <div className={`w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold text-white uppercase border-2 border-${currentTheme === 'Violet' ? 'violet' : currentTheme.toLowerCase()}-500`}>
+              {user.photoURL ? <img src={user.photoURL} alt="Profile" className="w-full h-full rounded-full object-cover" /> : username[0]}
+            </div>
+            <div>
+              <h4 className="text-white font-bold text-lg">{user.displayName || "Pilot"}</h4>
+              <p className="text-gray-400 text-sm">{user.email}</p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <label className="text-xs font-bold text-gray-500 uppercase">Display Name / Username</label>
+            <div className="flex gap-2">
+              <input 
+                type="text" 
+                value={username} 
+                onChange={(e) => handleUpdate('username', e.target.value)}
+                className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-violet-500 transition"
+              />
+            </div>
+            <p className="text-[10px] text-gray-500">This name will appear on your dashboard.</p>
+          </div>
+        </GlassCard>
+
+        {/* Appearance Card */}
+        <GlassCard>
+          <h3 className="flex items-center gap-2 text-xl font-bold text-white mb-6">
+            <ImageIcon size={24} className="text-violet-500" /> Appearance
+          </h3>
+
+          <div className="mb-8">
+            <label className="text-xs font-bold text-gray-500 uppercase mb-3 block">Color Theme</label>
+            <div className="grid grid-cols-2 gap-3">
+              {THEME_COLORS.map((theme) => {
+                const isActive = currentTheme === theme.name;
+                return (
+                  <button 
+                    key={theme.name}
+                    onClick={() => handleUpdate('theme', theme.name)}
+                    className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${isActive ? 'bg-violet-600/20 border-violet-500' : 'bg-transparent border-white/10 hover:border-white/30'}`}
+                  >
+                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: theme.hex }}></div>
+                    <span className={`text-sm font-bold ${isActive ? 'text-white' : 'text-gray-400'}`}>{theme.name}</span>
+                    {isActive && <CheckCircle size={16} className="ml-auto text-violet-500" />}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-bold text-gray-500 uppercase mb-3 block">Display Mode</label>
+            <button 
+              onClick={() => handleUpdate('mode', currentMode === 'Dark' ? 'Light' : 'Dark')}
+              className="w-full flex items-center justify-between p-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition"
+            >
+              <span className="text-sm font-bold text-white">Dark Mode</span>
+              <div className={`w-12 h-6 rounded-full border border-white/10 relative transition-colors ${currentMode === 'Dark' ? 'bg-violet-600' : 'bg-gray-600'}`}>
+                <div className={`absolute top-0.5 w-4.5 h-4.5 rounded-full bg-white shadow-sm transition-all ${currentMode === 'Dark' ? 'left-6' : 'left-1'}`} />
+              </div>
+            </button>
+          </div>
+        </GlassCard>
+      </div>
     </div>
   );
 };
-// --- PROFILE DROPDOWN ---
+
 // --- UPDATED PROFILE DROPDOWN (NAVIGATES TO PAGE) ---
 const ProfileDropdown = ({ user, onLogout, onChangeExam, data, setView }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -358,6 +319,7 @@ const ProfileDropdown = ({ user, onLogout, onChangeExam, data, setView }) => {
     </div>
   );
 };
+
 // --- EXAM SELECTION SCREEN ---
 const ExamSelectionScreen = ({ onSave }) => {
   const [selected, setSelected] = useState([]);
@@ -759,22 +721,22 @@ const Dashboard = ({ data, setData, goToTimer, user }) => {
         </GlassCard>
 
         <GlassCard>
-           <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-white">Tasks</h3><button onClick={addTask} className="text-xs px-3 py-1 bg-white/10 text-white rounded hover:bg-white/20">+ Add</button></div>
-           <div className="space-y-3 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
-             {data.tasks.map(task => (
-               <div key={task.id} className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5 hover:border-violet-500/50 transition cursor-pointer">
-                 <div onClick={() => toggleTask(task.id)} className="flex items-center gap-3">
-                     <div className={`w-5 h-5 rounded-full border-2 ${task.completed ? 'bg-violet-500 border-violet-500' : 'border-gray-600'}`}>{task.completed && <CheckCircle size={12} className="text-white mx-auto mt-0.5" />}</div>
-                     <div>
-                         <span className={`block ${task.completed ? 'text-gray-500 line-through' : 'text-gray-200'} text-sm`}>{task.text}</span>
-                         {task.subject && <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-gray-400">{task.subject}</span>}
-                     </div>
-                 </div>
-                 <button onClick={() => removeTask(task.id)} className="text-gray-600 hover:text-red-500"><X size={14}/></button>
-               </div>
-             ))}
-             {data.tasks.length === 0 && <div className="text-center text-gray-600 py-4">No tasks today.</div>}
-           </div>
+            <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-white">Tasks</h3><button onClick={addTask} className="text-xs px-3 py-1 bg-white/10 text-white rounded hover:bg-white/20">+ Add</button></div>
+            <div className="space-y-3 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
+              {data.tasks.map(task => (
+                <div key={task.id} className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5 hover:border-violet-500/50 transition cursor-pointer">
+                  <div onClick={() => toggleTask(task.id)} className="flex items-center gap-3">
+                      <div className={`w-5 h-5 rounded-full border-2 ${task.completed ? 'bg-violet-500 border-violet-500' : 'border-gray-600'}`}>{task.completed && <CheckCircle size={12} className="text-white mx-auto mt-0.5" />}</div>
+                      <div>
+                          <span className={`block ${task.completed ? 'text-gray-500 line-through' : 'text-gray-200'} text-sm`}>{task.text}</span>
+                          {task.subject && <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-gray-400">{task.subject}</span>}
+                      </div>
+                  </div>
+                  <button onClick={() => removeTask(task.id)} className="text-gray-600 hover:text-red-500"><X size={14}/></button>
+                </div>
+              ))}
+              {data.tasks.length === 0 && <div className="text-center text-gray-600 py-4">No tasks today.</div>}
+            </div>
         </GlassCard>
       </div>
     </div>
@@ -896,19 +858,20 @@ export default function App() {
              {view === 'kpp' ? 'Physics KPP' : view}
            </h2>
            <ProfileDropdown 
-            user={user} 
-            onLogout={handleLogout} 
-            onChangeExam={() => setShowExamSelect(true)} 
-            data={data} 
-            setData={setData} />
-          </div>
+              user={user} 
+              onLogout={handleLogout} 
+              onChangeExam={() => setShowExamSelect(true)} 
+              data={data}
+              setView={setView} 
+            />
+        </div>
 
         {view === 'dashboard' && <Dashboard data={data} setData={setData} goToTimer={() => setView('timer')} user={user} />}
         {view === 'analysis' && <Analysis data={data} />} 
         {view === 'timer' && <FocusTimer data={data} setData={setData} onSaveSession={saveSession} />} 
         {view === 'syllabus' && <Syllabus data={data} setData={setData} />}
         {view === 'mocks' && <MockTestTracker data={data} setData={setData} />}
-        {view === 'kpp' && <PhysicsKPP data={data} setData={setData} />} {view === 'settings' && <SettingsView data={data} setData={setData} user={user} onBack={() => setView('dashboard')} />}
+        {view === 'kpp' && <PhysicsKPP data={data} setData={setData} />} 
         {view === 'settings' && <SettingsView data={data} setData={setData} user={user} onBack={() => setView('dashboard')} />}
       </main>
 
