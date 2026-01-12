@@ -14,6 +14,7 @@ import {
   Legend, LineChart, Line
 } from 'recharts';
 import { motion, AnimatePresence } from 'framer-motion';
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // --- FIREBASE IMPORTS ---
 import { 
@@ -372,6 +373,43 @@ const Dashboard = ({ data, setData, goToTimer, user, theme, isDark }) => {
   const toggleTask = (id) => setData(prev => ({ ...prev, tasks: prev.tasks.map(t => t.id === id ? { ...t, completed: !t.completed } : t) }));
   const removeTask = (id) => setData(prev => ({ ...prev, tasks: prev.tasks.filter(t => t.id !== id) }));
   const textCol = isDark ? 'text-white' : 'text-gray-900';
+
+  // --- GEMINI AI INTEGRATION ---
+  const [aiAdvice, setAiAdvice] = useState("");
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  const handleAnalyze = async () => {
+    setIsAnalyzing(true);
+    try {
+      // 1. Setup the connection
+      // WARNING: In a real app, put this key in a .env file so it's hidden!
+      const genAI = new GoogleGenerativeAI("AIzaSyCUxcGF6dYqYm4uoZavFWOZyC7n795Hxso"); 
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+      // 2. Prepare the message
+      const prompt = `
+        I am a student preparing for competitive exams (JEE/NEET).
+        Here is my data:
+        - Exams: ${data.selectedExams?.join(", ") || "None"}
+        - Study Streak: ${streak} days
+        - Today's Study: ${Math.floor(todayMins/60)}h ${Math.round(todayMins%60)}m
+        - Pending Tasks: ${data.tasks.filter(t => !t.completed).map(t => t.text).join(", ") || "None"}
+        
+        Please give me a short, encouraging, but strict analysis of my progress. 
+        Keep it under 50 words. Roast me slightly if my study time is low.
+      `;
+
+      // 3. Send and wait for reply
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      setAiAdvice(response.text());
+      
+    } catch (error) {
+      console.error("AI Error:", error);
+      setAiAdvice("The pilot is radio silent. (Check your API Key or Internet)");
+    }
+    setIsAnalyzing(false);
+  };
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
