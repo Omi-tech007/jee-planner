@@ -30,7 +30,7 @@ import { doc, setDoc, getDoc } from "firebase/firestore";
 import { auth, googleProvider, db } from "./firebase"; 
 
 /**
- * PREPPILOT - v38.0 (PrepAI Full Integration + Daily Briefing)
+ * PREPPILOT - v39.0 (CRASH FIXED: Safe Styling)
  */
 
 // --- CONSTANTS ---
@@ -115,16 +115,6 @@ const GlassCard = ({ children, className = "", hover = false, isDark = true }) =
 );
 
 const StudyHeatmap = ({ history, theme, isDark }) => {
-  const generateYearData = () => {
-    const days = []; const today = new Date(); const end = today; const start = new Date(end); start.setDate(end.getDate() - 364); 
-    for (let i = 0; i < 365; i++) {
-      const d = new Date(start); d.setDate(start.getDate() + i);
-      const dateStr = d.toISOString().split('T')[0]; const mins = history[dateStr] || 0;
-      let intensity = 0; if (mins > 0) intensity = 1; if (mins > 60) intensity = 2; if (mins > 180) intensity = 3; if (mins > 360) intensity = 4;
-      days.push({ date: dateStr, intensity, dayOfWeek: d.getDay() });
-    }
-    return days;
-  };
   const year = new Date().getFullYear();
   const months = Array.from({ length: 12 }, (_, i) => i);
   const getCellColor = (minutes) => {
@@ -229,8 +219,8 @@ const PrepAIView = ({ data, theme, isDark }) => {
     setLoading(true);
 
     try {
-      // --- API KEY HERE ---
-      const genAI = new GoogleGenerativeAI("YOUR_API_KEY_HERE");
+      // --- API KEY HERE (PASTE IT HERE) ---
+      const genAI = new GoogleGenerativeAI("AIzaSyCUxcGF6dYqYm4uoZavFWOZyC7n795Hxso");
       const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
       const context = `
@@ -295,7 +285,7 @@ const PrepAIView = ({ data, theme, isDark }) => {
   );
 };
 
-// --- DASHBOARD (WITH BRIEFING SLIDE) ---
+// --- DASHBOARD (WITH SAFE AI SLIDE) ---
 const Dashboard = ({ data, setData, goToTimer, setView, user, theme, isDark }) => {
   const today = new Date().toISOString().split('T')[0];
   const history = data.history || {}; const todayMins = history[today] || 0;
@@ -315,8 +305,8 @@ const Dashboard = ({ data, setData, goToTimer, setView, user, theme, isDark }) =
   const generateBriefing = async () => {
     setLoadingBrief(true);
     try {
-      // --- API KEY HERE ---
-      const genAI = new GoogleGenerativeAI("AIzaSyCUxcGF6dYqYm4uoZavFWOZyC7n795Hxso");
+      // --- API KEY HERE (PASTE IT HERE) ---
+      const genAI = new GoogleGenerativeAI("YOUR_API_KEY_HERE");
       const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
       const prompt = `Give me a 2-sentence summary of my day. Data: Studied ${Math.floor(todayMins/60)}h ${Math.round(todayMins%60)}m. Streak: ${streak}. Pending Tasks: ${data.tasks.filter(t=>!t.completed).length}.`;
       const result = await model.generateContent(prompt);
@@ -340,8 +330,8 @@ const Dashboard = ({ data, setData, goToTimer, setView, user, theme, isDark }) =
           </div>
       </div>
 
-      {/* AI SUMMARY SLIDE */}
-      <GlassCard className={`relative overflow-hidden ${isDark ? `bg-gradient-to-r from-${theme.name.toLowerCase()}-900/20 to-transparent` : 'bg-white'}`} isDark={isDark}>
+      {/* AI SUMMARY SLIDE (SAFE STYLING) */}
+      <GlassCard className={`relative overflow-hidden ${isDark ? theme.light : 'bg-white border-gray-200'}`} isDark={isDark}>
         <div className="flex justify-between items-start gap-4">
             <div>
                 <h3 className={`font-bold flex items-center gap-2 ${textCol} mb-2`}><Sparkles size={18} className="text-yellow-400" /> AI Daily Briefing</h3>
@@ -510,29 +500,6 @@ const MockTestTracker = ({ data, setData, theme, isDark }) => {
   );
 };
 
-// --- LOGIN SCREEN ---
-const LoginScreen = () => {
-  const [isLogin, setIsLogin] = useState(true); const [isReset, setIsReset] = useState(false); const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [error, setError] = useState(""); const [isLoading, setIsLoading] = useState(false);
-  const handleGoogleLogin = async () => { try { await signInWithPopup(auth, googleProvider); } catch (error) { setError(error.message); } };
-  const handleAuth = async (e) => { e.preventDefault(); setError(""); setIsLoading(true); try { if (isReset) { await sendPasswordResetEmail(auth, email); alert(`Link sent to ${email}`); setIsReset(false); } else if (isLogin) { await signInWithEmailAndPassword(auth, email, password); } else { const userCredential = await createUserWithEmailAndPassword(auth, email, password); await sendEmailVerification(userCredential.user); alert("Verification email sent!"); } } catch (err) { setError(err.message); } setIsLoading(false); };
-  return (
-    <div className="h-screen w-full bg-[#09090b] flex flex-col items-center justify-center p-6">
-      <div className="w-full max-w-md bg-[#121212] border border-white/10 rounded-3xl p-8 shadow-2xl">
-        <div className="text-center mb-8"><div className="inline-flex p-4 bg-violet-600/20 rounded-full mb-4 animate-pulse"><Zap size={40} className="text-violet-500" /></div><h1 className="text-3xl font-bold text-white">PrepPilot <span className="text-violet-500">Pro</span></h1><p className="text-gray-400 text-sm mt-2">{isReset ? "Reset Password" : (isLogin ? "Welcome back!" : "Prepare for takeoff.")}</p></div>
-        <form onSubmit={handleAuth} className="space-y-4"><div className="space-y-2"><div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl px-4 py-3"><Mail size={20} className="text-gray-400" /><input type="email" placeholder="Email" required className="bg-transparent outline-none text-white w-full placeholder-gray-500" value={email} onChange={e => setEmail(e.target.value)} /></div>{!isReset && (<div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl px-4 py-3"><Lock size={20} className="text-gray-400" /><input type="password" placeholder="Password" required className="bg-transparent outline-none text-white w-full placeholder-gray-500" value={password} onChange={e => setPassword(e.target.value)} /></div>)}</div>{error && <p className="text-red-400 text-xs text-center">{error}</p>}{!isReset && isLogin && (<div className="flex justify-end"><button type="button" onClick={() => setIsReset(true)} className="text-xs text-violet-400 font-bold">Forgot Password?</button></div>)}<button type="submit" disabled={isLoading} className="w-full py-4 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl">{isLoading ? "Processing..." : (isReset ? "Send Link" : (isLogin ? "Login" : "Sign Up"))}</button></form>
-        {!isReset && (<><div className="flex items-center gap-4 my-6"><div className="h-px bg-white/10 flex-1"></div><span className="text-xs text-gray-500 font-bold uppercase">Or</span><div className="h-px bg-white/10 flex-1"></div></div><button onClick={handleGoogleLogin} className="w-full py-3 bg-white text-black font-bold rounded-xl flex items-center justify-center gap-3"><img src="https://www.google.com/favicon.ico" alt="G" className="w-5 h-5" /> Google</button><p className="text-center text-gray-400 text-sm mt-8">{isLogin ? "No account?" : "Have account?"} <button onClick={() => setIsLogin(!isLogin)} className="text-violet-400 font-bold ml-2">{isLogin ? "Sign Up" : "Login"}</button></p></>)}
-      </div>
-    </div>
-  );
-};
-
-const ExamSelectionScreen = ({ onSave }) => {
-  const [selected, setSelected] = useState([]); const toggleExam = (exam) => { if (selected.includes(exam)) setSelected(selected.filter(e => e !== exam)); else setSelected([...selected, exam]); };
-  return (
-    <div className="h-screen w-full bg-[#09090b] flex flex-col items-center justify-center p-6"><div className="max-w-5xl w-full text-center"><h1 className="text-3xl font-bold text-white mb-2">Select Exams</h1><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-10 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">{Object.keys(EXAM_CONFIG).map((exam) => { const isSelected = selected.includes(exam); return ( <button key={exam} onClick={() => toggleExam(exam)} className={`p-5 rounded-2xl text-left flex justify-between items-center border ${isSelected ? 'bg-violet-600/20 border-violet-500' : 'bg-white/5 border-white/10'}`}><div><h3 className={`text-sm font-bold ${isSelected ? 'text-white' : 'text-gray-300'}`}>{exam}</h3></div>{isSelected && <CheckCircle size={20} className="text-violet-500" />}</button> ); })}</div><button onClick={() => onSave(selected)} disabled={selected.length === 0} className="px-10 py-4 bg-white text-black font-bold rounded-xl disabled:opacity-50">Continue</button></div></div>
-  );
-};
-
 // --- APP SHELL ---
 export default function App() {
   const [user, setUser] = useState(null);
@@ -542,7 +509,6 @@ export default function App() {
   const [showExamSelect, setShowExamSelect] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true); // Default open
 
-  // --- DERIVE THEME ---
   const theme = getThemeStyles(data.settings?.theme || 'Violet');
   const isDark = (data.settings?.mode || 'Dark') === 'Dark';
 
@@ -572,7 +538,7 @@ export default function App() {
 
   const navItems = [
     { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' }, 
-    { id: 'prepai', icon: Bot, label: 'PrepAI' }, // NEW
+    { id: 'prepai', icon: Bot, label: 'PrepAI' }, 
     { id: 'timer', icon: TimerIcon, label: 'Timer' }, 
     { id: 'analysis', icon: PieChartIcon, label: 'Analysis' }, 
     { id: 'syllabus', icon: BookOpen, label: 'Syllabus' }, 
@@ -582,7 +548,6 @@ export default function App() {
 
   return (
     <div className={`min-h-screen font-sans transition-colors duration-300 flex ${isDark ? 'bg-[#09090b] text-gray-200' : 'bg-gray-100 text-gray-900'}`}>
-      {/* EXPANDABLE SIDEBAR */}
       <aside className={`fixed left-0 top-0 h-full border-r flex flex-col transition-all duration-300 z-40 hidden md:flex ${isSidebarOpen ? 'w-64' : 'w-20'} ${isDark ? 'bg-[#09090b] border-white/10' : 'bg-white border-black/10'}`}>
         <div className="flex items-center justify-between p-6">
             <div className={`flex items-center gap-3 ${isSidebarOpen ? 'opacity-100' : 'opacity-0 hidden'}`}>
@@ -590,19 +555,11 @@ export default function App() {
                <span className={`font-bold text-lg ${isDark ? 'text-white' : 'text-black'}`}>PrepPilot</span>
             </div>
             {!isSidebarOpen && <Zap size={24} className={`${theme.text} mx-auto mb-4`} />}
-            
-            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className={`p-1 rounded hover:bg-white/10 transition ${!isSidebarOpen && 'mx-auto'}`}>
-                {isSidebarOpen ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
-            </button>
+            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className={`p-1 rounded hover:bg-white/10 transition ${!isSidebarOpen && 'mx-auto'}`}><div className={isDark ? 'text-white' : 'text-black'}>{isSidebarOpen ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}</div></button>
         </div>
-
         <nav className="flex flex-col gap-2 w-full px-4 mt-4">
           {navItems.map(item => (
-            <button 
-                key={item.id} 
-                onClick={() => setView(item.id)} 
-                className={`relative flex items-center gap-4 py-3 px-3 rounded-xl transition-all duration-200 group ${view === item.id ? `${theme.bg} text-white shadow-lg` : 'text-gray-500 hover:bg-white/5 hover:text-gray-300'}`}
-            >
+            <button key={item.id} onClick={() => setView(item.id)} className={`relative flex items-center gap-4 py-3 px-3 rounded-xl transition-all duration-200 group ${view === item.id ? `${theme.bg} text-white shadow-lg` : 'text-gray-500 hover:bg-white/5 hover:text-gray-300'}`}>
               <item.icon size={22} />
               {isSidebarOpen && <span className="font-bold text-sm whitespace-nowrap">{item.label}</span>}
               {!isSidebarOpen && <span className={`absolute left-14 z-50 px-2 py-1 text-xs font-bold rounded opacity-0 group-hover:opacity-100 transition pointer-events-none whitespace-nowrap ${isDark ? 'bg-white text-black' : 'bg-black text-white'}`}>{item.label}</span>}
@@ -611,7 +568,6 @@ export default function App() {
         </nav>
       </aside>
 
-      {/* MAIN CONTENT AREA */}
       <main className={`flex-1 p-6 md:p-10 pb-24 h-screen overflow-y-auto custom-scrollbar transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-20'}`}>
         <div className={`flex justify-between items-center mb-8 sticky top-0 backdrop-blur-md z-30 py-2 -mt-4 border-b ${isDark ? 'bg-[#09090b]/90 border-white/5' : 'bg-gray-100/90 border-black/5'}`}>
            <h2 className={`text-xl font-bold capitalize flex items-center gap-2 ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>{view === 'kpp' ? 'Physics KPP' : view}</h2>
@@ -628,7 +584,6 @@ export default function App() {
         {view === 'settings' && <SettingsView data={data} setData={setData} user={user} onBack={() => setView('dashboard')} theme={theme} isDark={isDark} />}
       </main>
 
-      {/* MOBILE NAV */}
       <div className={`md:hidden fixed bottom-0 left-0 w-full backdrop-blur-md border-t p-4 flex justify-around z-50 ${isDark ? 'bg-[#09090b]/95 border-white/10' : 'bg-white/95 border-black/10'}`}>
         <button onClick={() => setView('dashboard')} className={view === 'dashboard' ? theme.text : 'text-gray-500'}><LayoutDashboard /></button>
         <button onClick={() => setView('timer')} className={view === 'timer' ? theme.text : 'text-gray-500'}><TimerIcon /></button>
