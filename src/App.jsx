@@ -275,7 +275,7 @@ const PrepAIView = ({ data, theme, isDark }) => {
     try {
       // --- API KEY HERE ---
       const genAI = new GoogleGenerativeAI("AIzaSyCUxcGF6dYqYm4uoZavFWOZyC7n795Hxso");
-      const model = genAI.getGenerativeModel({ model: "gemini-2.5-Pro" });
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
 
       const context = `
         SYSTEM: You are PrepAI, a specialized tutor for JEE/NEET.
@@ -363,7 +363,7 @@ const Dashboard = ({ data, setData, goToTimer, setView, user, theme, isDark }) =
     try {
       // --- API KEY HERE ---
       const genAI = new GoogleGenerativeAI("AIzaSyCUxcGF6dYqYm4uoZavFWOZyC7n795Hxso");
-      const model = genAI.getGenerativeModel({ model: "gemini-2.5-Pro" });
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
       const prompt = `Give me a 2-sentence summary of my day. Data: Studied ${Math.floor(todayMins/60)}h ${Math.round(todayMins%60)}m. Streak: ${streak}. Pending Tasks: ${data.tasks.filter(t=>!t.completed).length}.`;
       const result = await model.generateContent(prompt);
       setBriefing(result.response.text());
