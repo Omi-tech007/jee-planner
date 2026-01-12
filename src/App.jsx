@@ -1,3 +1,4 @@
+// FILE: src/App.js
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   LayoutDashboard, BookOpen, Zap, Flame, Trophy, 
@@ -27,6 +28,7 @@ import {
   sendPasswordResetEmail 
 } from "firebase/auth";
 import { doc, setDoc, getDoc } from "firebase/firestore";
+// MAKE SURE YOU CREATED firebase.js IN THE SAME FOLDER
 import { auth, googleProvider, db } from "./firebase"; 
 
 /**
@@ -158,6 +160,28 @@ const GlassCard = ({ children, className = "", hover = false, isDark = true }) =
   </motion.div>
 );
 
+const ProfileDropdown = ({ user, onLogout, onChangeExam, data, setView, theme, isDark }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    return (
+        <div className="relative">
+            <button onClick={() => setIsOpen(!isOpen)} className="flex items-center gap-2">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${theme.bg} text-white`}>{user.email[0].toUpperCase()}</div>
+            </button>
+            {isOpen && (
+                <div className={`absolute right-0 mt-2 w-48 rounded-xl shadow-xl border py-2 z-50 ${isDark ? 'bg-[#18181b] border-white/10' : 'bg-white border-gray-200'}`}>
+                     <div className="px-4 py-2 border-b border-gray-700/50 mb-2">
+                        <p className={`text-xs font-bold ${isDark ? 'text-white' : 'text-black'}`}>{user.email}</p>
+                        <p className="text-[10px] text-gray-500">Level {Math.floor((data.xp || 0)/60)}</p>
+                     </div>
+                     <button onClick={() => {onChangeExam(); setIsOpen(false)}} className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-500/10 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Change Exams</button>
+                     <button onClick={() => {setView('settings'); setIsOpen(false)}} className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-500/10 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Settings</button>
+                     <button onClick={onLogout} className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-500/10">Log Out</button>
+                </div>
+            )}
+        </div>
+    );
+};
+
 // --- HEATMAP ---
 const StudyHeatmap = ({ history, theme, isDark }) => {
   const year = new Date().getFullYear();
@@ -247,7 +271,7 @@ const PrepAIView = ({ data, theme, isDark }) => {
     setLoading(true);
 
     try {
-      // --- API KEY ---
+      // --- PASTE YOUR GEMINI API KEY HERE ---
       const genAI = new GoogleGenerativeAI("YOUR_API_KEY_HERE");
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // 1.5 Flash for Images
 
@@ -342,13 +366,13 @@ const Dashboard = ({ data, setData, goToTimer, setView, user, theme, isDark }) =
   const generateBriefing = async () => {
     setLoadingBrief(true);
     try {
-      // --- API KEY ---
+      // --- PASTE YOUR GEMINI API KEY HERE AS WELL ---
       const genAI = new GoogleGenerativeAI("YOUR_API_KEY_HERE");
-      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
       const prompt = `Give me a 2-sentence summary of my day. Data: Studied ${Math.floor(todayMins/60)}h ${Math.round(todayMins%60)}m. Streak: ${streak}. Pending Tasks: ${data.tasks.filter(t=>!t.completed).length}.`;
       const result = await model.generateContent(prompt);
       setBriefing(result.response.text());
-    } catch (e) { setBriefing("Unable to generate briefing."); }
+    } catch (e) { setBriefing("Unable to generate briefing. Check API Key."); }
     setLoadingBrief(false);
   };
 
@@ -517,6 +541,42 @@ const MockTestTracker = ({ data, setData, theme, isDark }) => {
       <div className="grid gap-3">{sortedTests.length > 0 ? sortedTests.slice().reverse().map(test => (<div key={test.id} className={`group border p-4 rounded-xl flex items-center justify-between transition ${isDark ? 'bg-[#121212] border-white/10 hover:border-white/20' : 'bg-white border-gray-200 hover:border-gray-300'}`}><div className="flex gap-4 items-center"><div className={`w-1 h-12 rounded-full ${test.type.includes('NEET') || test.type.includes('PCB') ? 'bg-red-500' : theme.bg}`}></div><div><div className="flex items-center gap-3"><h3 className={`font-bold ${textCol}`}>{test.name}</h3><span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${isDark ? 'bg-white/10 text-gray-400' : 'bg-gray-100 text-gray-500'}`}>{test.type}</span>{test.reminder && <Bell size={12} className={theme.text} />}</div><div className="text-xs text-gray-500 mt-1">{test.date}</div><div className="flex gap-4 mt-2 text-sm"><span className="text-violet-400">P: {test.p}</span><span className="text-green-400">C: {test.c}</span><span className="text-blue-400">M/B: {test.m}</span></div></div></div><div className="flex items-center gap-6"><div className="text-right"><div className={`text-2xl font-bold ${textCol}`}>{test.total} <span className="text-sm text-gray-500 font-normal">/ {test.maxMarks}</span></div><div className="text-xs text-gray-500 uppercase">{test.maxMarks > 0 ? Math.round((test.total / test.maxMarks) * 100) : 0}%</div></div><button onClick={() => deleteTest(test.id)} className="p-2 text-gray-600 hover:text-red-500 transition"><Trash2 size={20} /></button></div></div>)) : <div className="text-center py-10 text-gray-500">No tests found.</div>}</div>
     </div>
   );
+};
+
+// --- SETTINGS VIEW ---
+const SettingsView = ({ data, setData, user, onBack, theme, isDark }) => {
+    return (
+        <div className="max-w-2xl mx-auto">
+            <button onClick={onBack} className="flex items-center gap-2 mb-6 text-gray-500 hover:text-white"><ArrowRight className="rotate-180" size={20} /> Back</button>
+            <h1 className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-gray-900'} mb-8`}>Settings</h1>
+            <GlassCard isDark={isDark} className="mb-6">
+                <h3 className="font-bold mb-4">Appearance</h3>
+                <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                        <span className="text-gray-400">Theme Color</span>
+                        <div className="flex gap-2">
+                            {THEME_COLORS.map(c => (
+                                <button key={c.name} onClick={() => setData({...data, settings: {...data.settings, theme: c.name}})} className={`w-6 h-6 rounded-full ${c.bg} ${data.settings.theme === c.name ? 'ring-2 ring-white' : ''}`} />
+                            ))}
+                        </div>
+                    </div>
+                    <div className="flex justify-between items-center">
+                        <span className="text-gray-400">Dark Mode</span>
+                        <button onClick={() => setData({...data, settings: {...data.settings, mode: isDark ? 'Light' : 'Dark'}})} className={`w-12 h-6 rounded-full relative transition ${isDark ? 'bg-green-500' : 'bg-gray-500'}`}>
+                            <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${isDark ? 'left-7' : 'left-1'}`} />
+                        </button>
+                    </div>
+                </div>
+            </GlassCard>
+            <GlassCard isDark={isDark}>
+                <h3 className="font-bold mb-4">Account</h3>
+                <p className="text-sm text-gray-500 mb-4">Logged in as {user.email}</p>
+                <div className="space-y-2">
+                    <button onClick={async () => {await sendPasswordResetEmail(auth, user.email); alert("Link sent!")}} className="w-full py-3 border border-white/10 rounded-xl hover:bg-white/5 text-left px-4">Reset Password</button>
+                </div>
+            </GlassCard>
+        </div>
+    );
 };
 
 // --- LOGIN SCREEN ---
