@@ -30,7 +30,7 @@ import { doc, setDoc, getDoc } from "firebase/firestore";
 import { auth, googleProvider, db } from "./firebase"; 
 
 /**
- * PREPPILOT - v39.0 (CRASH FIXED: Safe Styling)
+ * PREPPILOT - v41.0 (Rich Text Chat + Smart Formatting)
  */
 
 // --- CONSTANTS ---
@@ -104,6 +104,59 @@ const getUserSubjects = (selectedExams) => {
   });
 };
 
+// --- UTILITY: SMART TEXT FORMATTER (MARKDOWN-LITE) ---
+const SmartText = ({ text }) => {
+  if (!text) return null;
+  
+  // 1. Split by lines
+  const lines = text.split('\n');
+  
+  return (
+    <div className="space-y-1">
+      {lines.map((line, i) => {
+        // Handle Bullet Points
+        if (line.trim().startsWith('* ') || line.trim().startsWith('- ')) {
+          const content = line.trim().substring(2);
+          return (
+            <div key={i} className="flex gap-2 ml-2">
+              <span className="text-gray-400 mt-1.5">•</span>
+              <p className="flex-1"><FormatInline text={content} /></p>
+            </div>
+          );
+        }
+        
+        // Handle Headings (Lines ending with :)
+        if (line.trim().endsWith(':')) {
+           return <h4 key={i} className="font-bold mt-3 mb-1 text-base"><FormatInline text={line} /></h4>;
+        }
+
+        // Empty lines
+        if (!line.trim()) return <div key={i} className="h-2"></div>;
+
+        // Standard Paragraph
+        return <p key={i}><FormatInline text={line} /></p>;
+      })}
+    </div>
+  );
+};
+
+// Helper for Inline Formatting (Bold, Math)
+const FormatInline = ({ text }) => {
+  // Split by bold markers (**)
+  const parts = text.split(/(\*\*.*?\*\*)/g);
+  return (
+    <>
+      {parts.map((part, j) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          return <strong key={j} className="font-bold text-inherit">{part.slice(2, -2)}</strong>;
+        }
+        // Basic Math Cleanup (Visual only)
+        return <span key={j}>{part}</span>;
+      })}
+    </>
+  );
+};
+
 // --- UTILITY COMPONENTS ---
 const GlassCard = ({ children, className = "", hover = false, isDark = true }) => (
   <motion.div 
@@ -136,7 +189,8 @@ const StudyHeatmap = ({ history, theme, isDark }) => {
         for(let i=0; i<startDay; i++) slots.push(null);
         for(let i=1; i<=daysInMonth; i++) {
             const dayStr = `${year}-${String(monthIndex+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
-            slots.push({ date: dayStr, day: i, mins: history[dayStr] || 0 });
+            const safeHistory = history || {};
+            slots.push({ date: dayStr, day: i, mins: safeHistory[dayStr] || 0 });
         }
         return (
           <div key={monthIndex} className={`p-4 rounded-2xl border ${isDark ? 'bg-black/20 border-white/5' : 'bg-white border-gray-100 shadow-sm'}`}>
@@ -162,7 +216,7 @@ const SettingsView = ({ data, setData, user, onBack, theme, isDark }) => {
   const currentTheme = data.settings?.theme || 'Violet';
   const currentMode = data.settings?.mode || 'Dark';
   const username = data.settings?.username || user.displayName?.split(' ')[0] || "User";
-  const handleUpdate = (field, value) => { setData(prev => ({ ...prev, settings: { ...prev.settings || {}, [field]: value } })); };
+  const handleUpdate = (field, value) => { setData(prev => ({ ...prev, settings: { ...(prev.settings || {}), [field]: value } })); };
   const textPrimary = isDark ? 'text-white' : 'text-gray-900';
   const textSecondary = isDark ? 'text-gray-400' : 'text-gray-500';
 
@@ -201,7 +255,7 @@ const SettingsView = ({ data, setData, user, onBack, theme, isDark }) => {
   );
 };
 
-// --- PREPAI VIEW (FULL CHAT INTERFACE) ---
+// --- PREPAI VIEW (WITH SMART FORMATTING) ---
 const PrepAIView = ({ data, theme, isDark }) => {
   const [messages, setMessages] = useState([{ role: 'model', text: 'Hello! I am PrepAI, your dedicated study companion. I have access to your tasks, syllabus, and history. How can I help you ace your exams today?' }]);
   const [input, setInput] = useState('');
@@ -219,9 +273,9 @@ const PrepAIView = ({ data, theme, isDark }) => {
     setLoading(true);
 
     try {
-      // --- API KEY HERE (PASTE IT HERE) ---
+      // --- API KEY HERE ---
       const genAI = new GoogleGenerativeAI("AIzaSyCUxcGF6dYqYm4uoZavFWOZyC7n795Hxso");
-      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-Pro" });
 
       const context = `
         SYSTEM: You are PrepAI, a specialized tutor for JEE/NEET.
@@ -232,8 +286,9 @@ const PrepAIView = ({ data, theme, isDark }) => {
         
         INSTRUCTIONS: 
         1. Answer doubts clearly (Physics/Chem/Math/Bio).
-        2. If asked about progress, analyze the user data provided above.
-        3. Be motivating but strict if tasks are piling up.
+        2. Use bullet points and bold text (**bold**) for key terms.
+        3. If using math, keep it simple and clean.
+        4. Be motivating but strict.
       `;
 
       const prompt = `${context}\n\nUser: ${userMsg}`;
@@ -258,8 +313,9 @@ const PrepAIView = ({ data, theme, isDark }) => {
           {messages.map((msg, i) => (
             <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               {msg.role === 'model' && <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${theme.bg} text-white`}><Bot size={16} /></div>}
-              <div className={`max-w-[80%] p-4 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap shadow-sm ${msg.role === 'user' ? `${theme.msgUser} text-white rounded-br-none` : `${isDark ? 'bg-white/10 text-gray-200' : 'bg-gray-100 text-gray-800'} rounded-bl-none`}`}>
-                {msg.text}
+              <div className={`max-w-[80%] p-4 rounded-2xl text-sm leading-relaxed shadow-sm ${msg.role === 'user' ? `${theme.msgUser} text-white rounded-br-none` : `${isDark ? 'bg-white/10 text-gray-200' : 'bg-gray-100 text-gray-800'} rounded-bl-none`}`}>
+                {/* USE SMART TEXT FORMATTER */}
+                <SmartText text={msg.text} />
               </div>
             </div>
           ))}
@@ -305,9 +361,9 @@ const Dashboard = ({ data, setData, goToTimer, setView, user, theme, isDark }) =
   const generateBriefing = async () => {
     setLoadingBrief(true);
     try {
-      // --- API KEY HERE (PASTE IT HERE) ---
-      const genAI = new GoogleGenerativeAI("YOUR_API_KEY_HERE");
-      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+      // --- API KEY HERE ---
+      const genAI = new GoogleGenerativeAI("AIzaSyCUxcGF6dYqYm4uoZavFWOZyC7n795Hxso");
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-Pro" });
       const prompt = `Give me a 2-sentence summary of my day. Data: Studied ${Math.floor(todayMins/60)}h ${Math.round(todayMins%60)}m. Streak: ${streak}. Pending Tasks: ${data.tasks.filter(t=>!t.completed).length}.`;
       const result = await model.generateContent(prompt);
       setBriefing(result.response.text());
@@ -331,12 +387,13 @@ const Dashboard = ({ data, setData, goToTimer, setView, user, theme, isDark }) =
       </div>
 
       {/* AI SUMMARY SLIDE (SAFE STYLING) */}
-      <GlassCard className={`relative overflow-hidden ${isDark ? theme.light : 'bg-white border-gray-200'}`} isDark={isDark}>
+      <GlassCard className={`relative overflow-hidden ${isDark ? `border-${theme.border} bg-white/5` : 'bg-white border-gray-200'}`} isDark={isDark}>
         <div className="flex justify-between items-start gap-4">
             <div>
                 <h3 className={`font-bold flex items-center gap-2 ${textCol} mb-2`}><Sparkles size={18} className="text-yellow-400" /> AI Daily Briefing</h3>
                 {briefing ? (
-                    <p className={`text-sm leading-relaxed ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>{briefing}</p>
+                    // USE SMART TEXT FORMATTER HERE TOO
+                    <div className={`text-sm leading-relaxed ${isDark ? 'text-gray-300' : 'text-gray-600'}`}><SmartText text={briefing} /></div>
                 ) : (
                     <p className="text-xs text-gray-500 italic">Get a quick summary of your progress and tasks.</p>
                 )}
@@ -386,7 +443,7 @@ const ProfileDropdown = ({ user, onLogout, onChangeExam, data, setView, theme, i
   );
 };
 
-// --- OTHER COMPONENTS (Syllabus, Analysis, Timer - Restored) ---
+// --- OTHER COMPONENTS ---
 const Analysis = ({ data, theme, isDark }) => {
     const textCol = isDark ? 'text-white' : 'text-gray-900';
     const [range, setRange] = useState('Week');
@@ -509,8 +566,9 @@ export default function App() {
   const [showExamSelect, setShowExamSelect] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true); // Default open
 
-  const theme = getThemeStyles(data.settings?.theme || 'Violet');
-  const isDark = (data.settings?.mode || 'Dark') === 'Dark';
+  // --- DERIVE THEME (WITH FALLBACK) ---
+  const theme = getThemeStyles(data?.settings?.theme || 'Violet');
+  const isDark = (data?.settings?.mode || 'Dark') === 'Dark';
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
